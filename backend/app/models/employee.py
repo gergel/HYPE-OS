@@ -1,7 +1,7 @@
 from datetime import date
 from enum import StrEnum
 
-from sqlalchemy import Boolean, Date, Enum, ForeignKey, String
+from sqlalchemy import JSON, Boolean, Date, Enum, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -18,6 +18,26 @@ class EmployeeType(StrEnum):
     STAB = "stab"
 
 
+class BelsosJogviszony(StrEnum):
+    """Milyen formában dolgozik nálunk egy BELSŐS munkatárs.
+
+    Ettől függ, kell-e tőle havi teljesítési igazolás:
+
+    - MEGBIZAS: folyamatos megbízási szerződéssel dolgozik, tehát havonta
+      számláz - neki kell a TIG, a számla és a kifizetés végigkövetése.
+    - ALKALMAZOTT: bejelentett munkavállaló, a bérét bérszámfejtés fizeti.
+      Tőle NINCS havi TIG és nincs számla - nála a havi teendő pusztán annyi,
+      hogy a fizetése be legyen írva az adott hónapra (lásd
+      services/belsos_idoszak.kell_havi_tig).
+
+    Az alapértelmezés a MEGBIZAS: ez a rendszer korábbi (és a többségre igaz)
+    viselkedése, tehát a mező bevezetése önmagában senkinél nem változtat
+    semmit, amíg át nem állítják."""
+
+    MEGBIZAS = "megbizas"
+    ALKALMAZOTT = "alkalmazott"
+
+
 class SystemRole(StrEnum):
     """Auth/jogosultsági szerepkör - független az üzleti tipus mezőtől."""
 
@@ -25,6 +45,11 @@ class SystemRole(StrEnum):
     OPERATOR = "operator"
     VAGO = "vago"
     UGYFEL = "ugyfel"
+    #: Aki a projektek teljes "papírozásáért" felel: belsős TIG, külsős TIG és
+    #: alvállalkozói szerződés (utánkövetés), valamint a megrendelő felé menő
+    #: szerződés és TIG. Nekik a dashboard "Teendőim" widgete külön felhozza
+    #: ezeket a hiányzó papírokat (lásd routes/dashboard.py _papirozas_tasks).
+    ADMINISZTRACIO = "adminisztracio"
 
 
 class Employee(TimestampMixin, Base):
@@ -40,31 +65,172 @@ class Employee(TimestampMixin, Base):
         nullable=False,
     )
 
-    email: Mapped[str | None] = mapped_column(String(255), unique=True)
+    # SZÁNDÉKOSAN nem egyedi: a valóságban több embernek is lehet ugyanaz a
+    # címe (közös cég-postafiók, vagy egy stábtag a főnöke címét adja meg),
+    # és a korábbi unique megkötés miatt ilyenkor egyszerűen nem lehetett
+    # felvenni a második embert. Az index megmarad, mert a bejelentkezés e
+    # szerint keres (lásd api/routes/auth.py - ott a jelszó dönti el, melyik
+    # azonos című fiókról van szó).
+    email: Mapped[str | None] = mapped_column(String(255), index=True)
     telefon: Mapped[str | None] = mapped_column(String(50))
     jogositvany: Mapped[str | None] = mapped_column(String(255))
 
-    munkaszerzodes_url: Mapped[str | None] = mapped_column(String(500))
     ertekeles: Mapped[float | None] = mapped_column()
     elso_munkanap: Mapped[date | None] = mapped_column(Date)
     utolso_munkanap: Mapped[date | None] = mapped_column(Date)
 
+    #: BELSŐS napidíj: mennyibe kerül egy munkanapja a cégnek. Ebből számoljuk,
+    #: mennyi belsős munka van egy projektben (lásd
+    #: services/belsos_koltseg.py) - enélkül a projekt profitja túl szépnek
+    #: látszik, mert a saját emberünk munkája ingyennek tűnik.
+    #:
+    #: A VÁGÓKNÁL nincs jelentése: ők órabérben dolgoznak, az utómunka
+    #: költsége a mért időből jön (Deliverable.koltseg, lásd
+    #: services/deliverable_actions.py).
+    #:
+    #: FONTOS: ez a szám SOSEM lesz Kiadás sor. A havi alapbér egyben, a hónap
+    #: végén kerül a kiadások közé (Belsős TIG) - ha a napidíj is bekerülne,
+    #: ugyanaz a pénz kétszer szerepelne.
+    napi_dij: Mapped[float | None] = mapped_column(
+        Numeric(12, 2), comment="Belsős napidíj - projekt-önköltséghez, NEM kiadás-sor"
+    )
+
+    #: HÁNY NAPRA VAN SZERZŐDVE egy hónapban. A belsős szerződés nem "amennyit
+    #: kell", hanem egy megbeszélt napszám: ennyi nap benne van a havi bérben.
+    #:
+    #: Ami e FÖLÖTT van, az plusz munka, és külön díja van (`plusz_nap_napi_dij`)
+    #: - a projekt önköltségébe is azon az áron kell beszámítani, különben egy
+    #: hónap végi, túlórás forgatás olcsóbbnak látszana, mint amennyibe került
+    #: (lásd services/belsos_koltseg.py és services/munkanap_szamlalo.py).
+    #:
+    #: Üresen hagyva nincs korlát: minden nap a rendes napidíjon számol. Nem
+    #: tippelünk helyette számot - egy kitalált napszám csendben átárazná
+    #: minden projekt profitját.
+    szerzodott_napok: Mapped[int | None] = mapped_column(
+        Integer, comment="Havi szerződött munkanapok száma (belsős)"
+    )
+    #: A szerződött napokon FELÜLI nap ára. Ezt is csak akkor használjuk, ha
+    #: meg van adva: enélkül a plusz nap is a rendes napidíjon számol, és ezt
+    #: a felület ki is írja - egy hallgatólagos "ugyanannyi" rosszabb, mint egy
+    #: látható hiány.
+    plusz_nap_napi_dij: Mapped[float | None] = mapped_column(
+        Numeric(12, 2), comment="A szerződött napokon felüli nap napidíja (belsős)"
+    )
+
+    #: Belsősnél: bejelentett alkalmazott vagy megbízási szerződéses. A
+    #: bejelentett alkalmazottól nem várunk havi TIG-et (lásd
+    #: BelsosJogviszony). Külsősnél nincs jelentése.
+    belsos_jogviszony: Mapped[BelsosJogviszony] = mapped_column(
+        Enum(BelsosJogviszony, name="belsos_jogviszony", values_callable=lambda obj: [e.value for e in obj]),
+        nullable=False,
+        default=BelsosJogviszony.MEGBIZAS,
+        server_default=BelsosJogviszony.MEGBIZAS.value,
+    )
+
     # --- Auth ---
+    #: Az ELSŐDLEGES szerepkör. Egy embernek több is lehet (pl. admin ÉS
+    #: adminisztráció) - a többit a tovabbi_szerepkorok tartja. Azért maradt
+    #: külön oszlop, mert erre épül a régi adat és a token is; a
+    #: jogosultság-ellenőrzés viszont mindig a teljes halmazt nézi (lásd
+    #: szerepkorei() alább, illetve core/security.py).
     role: Mapped[SystemRole] = mapped_column(
         Enum(SystemRole, name="system_role", values_callable=lambda obj: [e.value for e in obj]),
         nullable=False,
         default=SystemRole.OPERATOR,
     )
+    #: További szerepkörök az elsődlegesen felül, SystemRole-értékek listája.
+    tovabbi_szerepkorok: Mapped[list | None] = mapped_column(JSON)
     hashed_password: Mapped[str | None] = mapped_column(String(255))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
+    #: A felület témája ehhez az emberhez: "sotet" vagy "vilagos". NULL = még
+    #: nem választott, olyankor a sötét alap érvényes.
+    #:
+    #: Miért az emberen és nem a böngészőben? Mert "az adott ember hogy szereti
+    #: használni" - aki otthon a laptopján világosra állítja, az az irodai gépen
+    #: is világosat vár. A böngészőben tárolt beállítás gépenként újrakezdődne,
+    #: és egy közös gépen a következő belépő az előző ízlését örökölné.
+    tema: Mapped[str | None] = mapped_column(String(10), comment="Felület témája: sotet / vilagos")
+
+    #: A munkatárs SAJÁT SZÍNE ("#rrggbb") - a profil oldalán állítja be, és a
+    #: neve ezen a színen jelenik meg pl. az utómunka kártyákon (a felhasználó
+    #: kérése). NULL = nincs színe, marad a semleges szövegszín.
+    szin: Mapped[str | None] = mapped_column(String(9), comment="Saját szín (#rrggbb) - a név színe a felületen")
+    #: PROFILKÉP data-URL-ként (a böngésző küldi, már lekicsinyítve ~256px-re,
+    #: lásd frontend app/profil). Szándékosan az adatbázisban és nem az R2-n:
+    #: pár tíz kB emberenként, cserébe a profilkép ott is működik, ahol az R2
+    #: nincs beállítva - de CSAK a saját /auth/me válaszban utazik, a
+    #: munkatárs-listákban nem (azokat felduzzasztaná).
+    profilkep: Mapped[str | None] = mapped_column(Text, comment="Profilkép (data-URL, kicsinyítve)")
+
+    # --- a 'Külsős és belsős' Notion tábla maradék mezői ---
+    technikai_ismeret: Mapped[str | None] = mapped_column(Text, comment="TECHNIKAI ISMERET")
+    vallalkozas_kepviselo: Mapped[str | None] = mapped_column(String(255), comment="Vállalkozás képviselő")
+    leltar_notion_ids: Mapped[dict | None] = mapped_column(JSON, comment="🎥 Leltár (relation)")
+    hany_visszajelzese_van_notion: Mapped[dict | None] = mapped_column(JSON, comment="Hány visszajelzése van")
+    first_name: Mapped[str | None] = mapped_column(String(120), comment="First name")
+    last_name: Mapped[str | None] = mapped_column(String(120), comment="Last name")
+    munkanapok_notion: Mapped[dict | None] = mapped_column(JSON, comment="Munkanapok")
+    linkedin_profile: Mapped[str | None] = mapped_column(String(500), comment="LinkedIn Profile")
+    twitter_profile: Mapped[str | None] = mapped_column(String(500), comment="Twitter Profile")
+    facebook_profile: Mapped[str | None] = mapped_column(String(500), comment="Facebook Profile")
+    photo_url: Mapped[str | None] = mapped_column(String(500), comment="Photo")
+    kulsos_tig_notion_ids: Mapped[dict | None] = mapped_column(JSON, comment="Külsős TIG (relation)")
+    belsos_tig_notion_ids: Mapped[dict | None] = mapped_column(JSON, comment="Belsős TIG (relation)")
+    orabler_notion: Mapped[str | None] = mapped_column(String(100), comment="Órabér (formula, pillanatkép)")
+    napidij_notion: Mapped[str | None] = mapped_column(String(100), comment="Napidíj (formula, pillanatkép)")
+    extra_kiadas_megnevezes: Mapped[str | None] = mapped_column(String(255), comment="Extra kiadás megnevezés")
+    extra_kiadas_osszeg: Mapped[float | None] = mapped_column(Numeric(12, 2), comment="Extra kiadás összeg")
+    extra_kiadas_datuma: Mapped[date | None] = mapped_column(Date, comment="Extra kiadás dátuma")
+    belsos_havi_tig: Mapped[bool | None] = mapped_column(Boolean, comment="Belsős Havi TIG")
+    source: Mapped[str | None] = mapped_column(String(100), comment="Source")
+    events_involved_count_notion: Mapped[dict | None] = mapped_column(JSON, comment="Events involved count (Σ)")
+    netto_osszeg: Mapped[float | None] = mapped_column(Numeric(12, 2), comment="Nettó összeg")
+    linked_events_notion_ids: Mapped[dict | None] = mapped_column(JSON, comment="Linked Events (relation)")
+    leltar_hiany_20240415_notion: Mapped[dict | None] = mapped_column(JSON, comment="2024.04.15. leltár hiány")
+    legutolso_napi_dij_megegyezes: Mapped[str | None] = mapped_column(
+        String(255), comment="LEGUTOLSÓ NAPI DÍJ MEGEGYEZÉS"
+    )
+    milyen_suru_hivjuk: Mapped[str | None] = mapped_column(String(255), comment="MILYEN SŰRŰN HÍVJUK")
+    megbizas_targya: Mapped[str | None] = mapped_column(String(255), comment="Megbízás tárgya")
+    szallito_notion_ids: Mapped[dict | None] = mapped_column(JSON, comment="Szállító (relation)")
+    keltezes_datuma: Mapped[date | None] = mapped_column(Date, comment="Keltezés dátuma")
+    archive_technika_elhagyas_notion_ids: Mapped[dict | None] = mapped_column(
+        JSON, comment="Archive technika elhagyás (relation)"
+    )
+    nyilvantartasi_szam: Mapped[str | None] = mapped_column(String(100), comment="Nyilvántartási szám:")
+    vallakozas_szekhely: Mapped[str | None] = mapped_column(String(500), comment="Vállakozás székhely")
+    van_e_email_cime_notion: Mapped[dict | None] = mapped_column(JSON, comment="van e email címe")
+    vallakozas_neve: Mapped[str | None] = mapped_column(String(255), comment="Vállakozás neve")
+    phone_2: Mapped[str | None] = mapped_column(String(50), comment="Phone 2")
+    megjegyzes: Mapped[str | None] = mapped_column(Text, comment="MEGJEGYZÉS")
+    honnan_ismerjuk: Mapped[str | None] = mapped_column(Text, comment="HONNAN ISMERJÜK")
+    birthday: Mapped[date | None] = mapped_column(Date, comment="Birthday")
+    kiadas_projektkodja_notion_ids: Mapped[dict | None] = mapped_column(JSON, comment="Kiadás projektkódja (relation)")
+    formula_2_notion: Mapped[dict | None] = mapped_column(JSON, comment="Formula 2")
+    main_database_notion_ids: Mapped[dict | None] = mapped_column(JSON, comment="📅 Main Database (relation)")
+    vallalkozas_adoszama: Mapped[str | None] = mapped_column(String(50), comment="Vállalkozás adószáma")
+    plusz_afa: Mapped[bool | None] = mapped_column(Boolean, comment="Plusz ÁFA")
+
     rates: Mapped[list["Rate"]] = relationship(back_populates="employee", cascade="all, delete-orphan")
+    documents: Mapped[list["EmployeeDocument"]] = relationship(back_populates="employee", cascade="all, delete-orphan")
+    # A havi juttatás-tételek (alapbér + extrák) - ezekből áll össze a havi
+    # Belsős TIG összege (lásd models/employee_monthly_item.py).
+    monthly_items: Mapped[list["EmployeeMonthlyItem"]] = relationship(
+        back_populates="employee", cascade="all, delete-orphan"
+    )
     timesheets: Mapped[list["Timesheet"]] = relationship(back_populates="employee")
     expenses: Mapped[list["Expense"]] = relationship(back_populates="employee")
     contracts: Mapped[list["Contract"]] = relationship(back_populates="employee")
+    performance_certificates: Mapped[list["PerformanceCertificate"]] = relationship(back_populates="employee")
+    internal_performance_certificates: Mapped[list["InternalPerformanceCertificate"]] = relationship(back_populates="employee")
     callsheets: Mapped[list["Callsheet"]] = relationship(back_populates="employee")
-    deliverables: Mapped[list["Deliverable"]] = relationship(back_populates="vago")
-    feedbacks: Mapped[list["Feedback"]] = relationship(back_populates="forgatta")
+    deliverables: Mapped[list["Deliverable"]] = relationship(
+        back_populates="vago", foreign_keys="Deliverable.vago_employee_id"
+    )
+    feedbacks: Mapped[list["Feedback"]] = relationship(
+        back_populates="forgatta", foreign_keys="Feedback.forgatta_employee_id"
+    )
     campaigns: Mapped[list["Campaign"]] = relationship(back_populates="felelos")
     tasks: Mapped[list["Task"]] = relationship(
         secondary="task_employees", back_populates="felelosok"
@@ -72,3 +238,37 @@ class Employee(TimestampMixin, Base):
     projects: Mapped[list["Project"]] = relationship(
         secondary="project_crew", back_populates="crew"
     )
+    #: Mettől meddig volt belsős - ettől függ, mely hónapokra várunk tőle
+    #: havi TIG-et (lásd services/belsos_idoszak.py). Több időszak is lehet:
+    #: kilép, majd visszajön.
+    belsos_idoszakok: Mapped[list["BelsosIdoszak"]] = relationship(
+        back_populates="employee", cascade="all, delete-orphan", order_by="BelsosIdoszak.kezdet"
+    )
+    #: Mely számlázó cégekhez tartozik (javaslat-szintű, lásd
+    #: models/vallalkozas.py VallalkozasTag).
+    vallalkozas_tagsagok: Mapped[list["VallalkozasTag"]] = relationship(
+        back_populates="employee", cascade="all, delete-orphan"
+    )
+
+
+def szerepkorei(employee: Employee) -> set[SystemRole]:
+    """A munkatárs ÖSSZES szerepköre - az elsődleges és a továbbiak együtt.
+
+    Egy ember több szerepkört is betölthet (pl. aki adminisztrációzik, de
+    admin jogot is kap). Minden jogosultság-ellenőrzés ezt a halmazt nézze, ne
+    csak az `employee.role` mezőt (lásd core/security.py require_roles).
+
+    Az ismeretlen (pl. időközben megszűnt) értékeket csendben eldobjuk: egy
+    régi szerepkörnév ne akadályozza meg a belépést."""
+    talalatok = {employee.role}
+    for ertek in employee.tovabbi_szerepkorok or []:
+        try:
+            talalatok.add(SystemRole(str(ertek)))
+        except ValueError:
+            continue
+    return talalatok
+
+
+def van_szerepkore(employee: Employee, *szerepkorok: SystemRole) -> bool:
+    """Megvan-e a felsoroltak KÖZÜL bármelyik szerepköre?"""
+    return bool(szerepkorei(employee) & set(szerepkorok))

@@ -1,0 +1,60 @@
+import { redirect } from "next/navigation";
+import { Card } from "@/components/Card";
+import { TopBar } from "@/components/TopBar";
+import { AdminAgentTabs } from "@/components/admin-agent/AdminAgentTabs";
+import { AdminTudastarKezelo } from "@/components/admin-agent/AdminTudastarKezelo";
+import { LaraKezikonyv } from "@/components/admin-agent/LaraKezikonyv";
+import { getAdminMemory, getAdminRules, getMyPagePermissions } from "@/lib/api";
+
+const PAGE = "/admin-agent";
+
+/** Lara — TUDÁSTÁR.
+ *
+ * Lara tudása: szabályok és példák. A gépi JELÖLT (javításokból, illetve a
+ * projektkód/utókövetés megfigyeléséből) egyértelműen elkülönítve jelenik meg,
+ * és csak emberi jóváhagyással kerül éles használatba — kivéve a valóság által
+ * már igazolt példát, amit Lara magától jóváhagy (lásd backend
+ * admin_agent/megerosites.py); ez „magától jóváhagyva" címkét kap. */
+export default async function AdminAgentTudastarPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ rendezes?: string }>;
+}) {
+  const { rendezes } = await searchParams;
+  const ertekSzerint = rendezes === "ertek";
+  const pagePermissions = await getMyPagePermissions();
+  const canView = pagePermissions === null || !!pagePermissions[PAGE]?.includes("view");
+  if (!canView) redirect("/nincs-jogosultsag");
+  const canEdit = pagePermissions === null || !!pagePermissions[PAGE]?.includes("edit");
+  const canApprove = pagePermissions === null || !!pagePermissions[PAGE]?.includes("delete");
+
+  const [szabalyok, peldak] = await Promise.all([getAdminRules(), getAdminMemory(ertekSzerint ? "ertek" : undefined)]);
+
+  return (
+    <div className="flex flex-1 flex-col">
+      <TopBar />
+      <div className="flex-1 p-4 md:p-8">
+        <AdminAgentTabs />
+        {szabalyok === null || peldak === null ? (
+          <Card title="Tudástár">
+            <p className="text-[13px] text-text-secondary">A tudástár most nem érhető el.</p>
+          </Card>
+        ) : (
+          <AdminTudastarKezelo
+            kezdoSzabalyok={szabalyok.elemek}
+            kezdoPeldak={peldak.elemek}
+            felretettRegi={peldak.felretett_regi ?? 0}
+            tanulasKezdete={peldak.tanulas_kezdete ?? null}
+            canEdit={canEdit}
+            ertekSzerint={ertekSzerint}
+          />
+        )}
+        <div id="kezikonyv" className="mt-4 scroll-mt-4">
+          <Card title="Rendszerkézikönyv — technikai leírás és jóváhagyott üzleti eljárás">
+            <LaraKezikonyv canEdit={canEdit} canApprove={canApprove} />
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}

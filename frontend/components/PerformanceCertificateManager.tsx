@@ -1,0 +1,737 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { vedettOverlayZaras } from "@/lib/vedettOverlayZaras";
+import { useRouter } from "next/navigation";
+import { authFetch } from "@/lib/authFetch";
+import { IndoklasDialog } from "@/components/IndoklasDialog";
+import { KuldesEllenorzo, type EllenorzoSor } from "@/components/KuldesEllenorzo";
+import { formatFt } from "@/lib/ido";
+import { PapirTetelValaszto, tetelKulcs } from "@/components/PapirTetelValaszto";
+import { PapirElonezet } from "@/components/PapirElonezet";
+import { PapirSokProjekt } from "@/components/PapirSokProjekt";
+import { SajatPapirFeltoltes } from "@/components/SajatPapirFeltoltes";
+import type { PendingTigEmployee, TigTetel } from "@/lib/api";
+import { KeresosSelect } from "@/components/KeresosSelect";
+import { TigAdatValaszto } from "@/components/TigAdatValaszto";
+
+type FormState = {
+  ceg_neve: string;
+  szekhely: string;
+  adoszam: string;
+  megbizas_targya: string;
+  netto_osszeg: string;
+  teljesites_szoveg: string;
+  keltezes: string;
+  plusz_afa: boolean;
+  /** Sok projektnél: ami a papíron a projektkódok helyett áll, és a levél tárgya. */
+  projekt_szoveg: string;
+  email_targy: string;
+  /** A kísérőlevél átírt szövege - üresen az alap (az előnézetben írható át). */
+  email_szoveg: string;
+};
+
+/** Az űrlap kiindulása három forrásból, ebben a sorrendben:
+ *
+ * 1. a **mentett TIG-piszkozat** - ha van, az az igazság, azon dolgoztak;
+ * 2. a fél **ESETI SZERZŐDÉSE** ezen a projekten - ugyanarról a munkáról szól,
+ *    tehát a megbízás tárgyát, az összeget és a teljesítés idejét onnan
+ *    vesszük át, hogy ne kelljen még egyszer begépelni;
+ * 3. a fél saját adatai, illetve a projekt forgatási dátumából képzett
+ *    alapértelmezett teljesítés-szöveg (`teljesitesAlap`).
+ *
+ * Ez ELŐTÖLTÉS, nem kényszer: minden mező szerkeszthető marad, és a mentés a
+ * TIG saját adatait írja - a szerződéshez nem nyúl. */
+function formFromEmployee(employee: PendingTigEmployee, teljesitesAlap: string): FormState {
+  const draft = employee.draft;
+  const sz = employee.szerzodes;
+  // A ?? csak a null/undefined-et engedi tovább, az üres szöveget nem - a
+  // szerződésen üresen hagyott mezőnél a fél saját adata a jobb kiindulás.
+  const ures = (ertek: string | null | undefined) => (ertek?.trim() ? ertek : null);
+  return {
+    ceg_neve: draft?.ceg_neve ?? ures(sz?.ceg_neve) ?? employee.ceg_neve ?? "",
+    szekhely: draft?.szekhely ?? ures(sz?.szekhely) ?? employee.szekhely ?? "",
+    adoszam: draft?.adoszam ?? ures(sz?.adoszam) ?? employee.adoszam ?? "",
+    megbizas_targya:
+      draft?.megbizas_targya ?? ures(sz?.megbizas_targya) ?? employee.megbizas_targya ?? "",
+    netto_osszeg:
+      draft?.netto_osszeg != null
+        ? String(draft.netto_osszeg)
+        : sz?.netto_osszeg != null
+          ? String(sz.netto_osszeg)
+          : "",
+    teljesites_szoveg: draft?.teljesites_szoveg ?? ures(sz?.teljesites_szoveg) ?? teljesitesAlap,
+    keltezes: draft?.keltezes ?? "",
+    plusz_afa: draft?.plusz_afa ?? sz?.plusz_afa ?? employee.plusz_afa ?? false,
+    projekt_szoveg: draft?.projekt_szoveg ?? "",
+    email_targy: draft?.email_targy ?? "",
+    email_szoveg: draft?.email_szoveg ?? "",
+  };
+}
+
+/** Bruttó = nettó * 1,27, ha a megbízottnak plusz ÁFA-t kell felszámolni,
+ * egyébként megegyezik a nettóval. */
+function computeBrutto(nettoOsszeg: string, pluszAfa: boolean): number | null {
+  if (!nettoOsszeg.trim()) return null;
+  const netto = Number(nettoOsszeg);
+  if (Number.isNaN(netto)) return null;
+  return pluszAfa ? Math.round(netto * 1.27 * 100) / 100 : netto;
+}
+
+/** A projekten résztvevő, még nem kezelt (nem belsős - a keretszerződéseseket
+ * IS beleértve) emberek listája + a hozzájuk tartozó teljesítési igazolás
+ * kétlépéses (mentés majd generálás-és-küldés, vagy kihagyás) szerkesztő
+ * űrlapja. Ugyanaz a mintázat, mint a SubcontractorContractManager-nél, csak
+ * kevesebb mezővel (nincs Nyilvántartási szám / Képviselő - ezek nem
+ * szerepelnek a TIG sablonban). */
+export function PerformanceCertificateManager({
+  projectId,
+  pending,
+  teljesitesAlap = "",
+}: {
+  projectId: number;
+  pending: PendingTigEmployee[];
+  /** A teljesítés idejének alapértelmezett szövege (a projekt forgatási
+   * dátumából) - lásd backend PendingProjectDetail.teljesites_szoveg_alap. */
+  teljesitesAlap?: string;
+}) {
+  const router = useRouter();
+  // A kiválasztás SZÁMLÁZÓ FÉL szerint megy ("e12" / "v3"): egy TIG több ember
+  // munkájáról is szólhat (lásd backend services/szamlazo.py).
+  const [selectedId, setSelectedId] = useState<string>("");
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [form, setForm] = useState<FormState | null>(null);
+  const [busy, setBusy] = useState<"save" | "send" | "skip" | "gen" | null>(null);
+  const [kihagyasNyitva, setKihagyasNyitva] = useState(false);
+  const [kuldesNyitva, setKuldesNyitva] = useState(false);
+  // CSAK GENERÁLÁS (a felhasználó kérése): elkészül és felkerül, de nem megy ki.
+  const [generalasNyitva, setGeneralasNyitva] = useState(false);
+
+  // A TIG TÉTELEI: mit igazol ez a papír. Alapból a projekten hozzá tartozó
+  // stábtagok, de más projektek nyitott munkái is rátehetők - ez az "egy ember
+  // egyben küld be több projektet" eset.
+  const [valaszthato, setValaszthato] = useState<TigTetel[]>([]);
+  const [kivalasztott, setKivalasztott] = useState<Set<string>>(new Set());
+  const [osszegek, setOsszegek] = useState<Record<string, string>>({});
+  const [tetelekToltodnek, setTetelekToltodnek] = useState(false);
+
+  const selectedEmployee = pending.find((p) => p.szamlazo === openId) ?? null;
+  const bruttoOsszeg = form ? computeBrutto(form.netto_osszeg, form.plusz_afa) : null;
+  // Hány FORGATÁSRA szól a fél eseti szerződése. Ha többre, a TIG is mindre
+  // szól alapból - és akkor a végén a számla is egy lesz az egészre.
+  const szerzodesNapok = new Set((selectedEmployee?.szerzodes?.tetelek ?? []).map((t) => t.project_id)).size;
+
+  // A nyitott tételeket a fél kiválasztásakor kérjük le - más projektek
+  // munkái csak a szerveren láthatók (lásd getNyitottTigTetelek).
+  useEffect(() => {
+    if (!selectedEmployee) return;
+    let ervenyes = true;
+    setTetelekToltodnek(true);
+    authFetch(`/api/v1/teljesitesi-igazolasok/${projectId}/${selectedEmployee.szamlazo}/nyitott-tetelek`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((nyitott: TigTetel[]) => {
+        if (!ervenyes) return;
+        const mar = selectedEmployee.draft?.tetelek ?? selectedEmployee.lefedettek;
+        // A már rajta lévő tételek nem szerepelnek a "nyitott" listán (nem
+        // nyitottak) - ezért kell összefésülni a kettőt.
+        const egyben = [...mar];
+        for (const t of nyitott) {
+          if (!egyben.some((m) => tetelKulcs(m) === tetelKulcs(t))) egyben.push(t);
+        }
+        setValaszthato(egyben);
+        setKivalasztott(new Set(mar.map(tetelKulcs)));
+        // A tételösszegek is a szerződésről jönnek, ha a TIG-en még nincsenek:
+        // ott már megadták, kinek mennyi jár ezen a projekten.
+        const szerzodesOsszegek = Object.fromEntries(
+          (selectedEmployee.szerzodes?.tetelek ?? [])
+            .filter((t) => t.netto_osszeg != null)
+            .map((t) => [tetelKulcs(t), String(t.netto_osszeg)]),
+        );
+        setOsszegek({
+          ...szerzodesOsszegek,
+          ...Object.fromEntries(
+            mar.filter((t) => t.netto_osszeg != null).map((t) => [tetelKulcs(t), String(t.netto_osszeg)]),
+          ),
+        });
+      })
+      .finally(() => ervenyes && setTetelekToltodnek(false));
+    return () => {
+      ervenyes = false;
+    };
+  }, [projectId, selectedEmployee]);
+
+  function openForm() {
+    if (!selectedId) return;
+    const employee = pending.find((p) => p.szamlazo === selectedId);
+    if (!employee) return;
+    setForm(formFromEmployee(employee, teljesitesAlap));
+    setOpenId(employee.szamlazo);
+  }
+
+  function closeForm() {
+    setOpenId(null);
+    setForm(null);
+    setValaszthato([]);
+    setKivalasztott(new Set());
+    setOsszegek({});
+  }
+
+  function billen(kulcs: string) {
+    setKivalasztott((elozo) => {
+      const uj = new Set(elozo);
+      if (uj.has(kulcs)) uj.delete(kulcs);
+      else uj.add(kulcs);
+      return uj;
+    });
+  }
+
+  function update<K extends keyof FormState>(key: K, value: FormState[K]) {
+    setForm((prev) => (prev ? { ...prev, [key]: value } : prev));
+  }
+
+  /** A kipipált tételek - MIT igazol ez a papír. A kihagyás ugyanezt küldi,
+   * mint a mentés: egy TIG több projekt munkájáról is szólhat, tehát a
+   * kihagyása is - különben a többi projekten a fél újra TIG-re várna. */
+  function buildTetelek() {
+    // A tétel-összeg szándékosan elhagyható: összevont számlánál nem mindig
+    // tudható, mi mennyibe került. A TIG fejösszege az igazság.
+    const tetelek = valaszthato
+      .filter((t) => kivalasztott.has(tetelKulcs(t)))
+      .map((t) => {
+        const nyers = (osszegek[tetelKulcs(t)] ?? "").trim();
+        return {
+          project_id: t.project_id,
+          employee_id: t.employee_id,
+          netto_osszeg: nyers && !Number.isNaN(Number(nyers)) ? Number(nyers) : null,
+        };
+      });
+    // Üres lista helyett `null`: a lezáró műveleteknél az azt jelenti, hogy
+    // maradjon, ami a bejegyzésen van (a mentés viszont üresen hibát ad, ott
+    // ez tudatos hiba).
+    return tetelek.length > 0 ? tetelek : null;
+  }
+
+  function buildPayload() {
+    if (!form) return null;
+    const netto = form.netto_osszeg.trim() ? Number(form.netto_osszeg) : null;
+    return {
+      tetelek: buildTetelek() ?? [],
+      ceg_neve: form.ceg_neve || null,
+      szekhely: form.szekhely || null,
+      adoszam: form.adoszam || null,
+      megbizas_targya: form.megbizas_targya || null,
+      netto_osszeg: netto,
+      teljesites_szoveg: form.teljesites_szoveg || null,
+      keltezes: form.keltezes || null,
+      plusz_afa: form.plusz_afa,
+      // Üres szöveg = a szokásos (a szerver törli a korábban megadottat).
+      projekt_szoveg: form.projekt_szoveg,
+      email_targy: form.email_targy,
+      email_szoveg: form.email_szoveg,
+    };
+  }
+
+  // A kijelölt tételek projektjei (kóddal) - több projektnél felajánljuk a
+  // felsorolás helyetti szöveget és a levél tárgyát (lásd PapirSokProjekt).
+  const kijeloltProjektek = [
+    ...new Map(
+      valaszthato
+        .filter((t) => kivalasztott.has(tetelKulcs(t)))
+        .map((t) => [t.project_id, t.projektkod ?? t.project_nev ?? `#${t.project_id}`]),
+    ).values(),
+  ];
+
+  /** Az űrlap mentése - a saját TIG feltöltése előtt is ez fut le, hogy a
+   * beírt adatok (összeg, tételek) a feltöltött papír mellett legyenek. */
+  async function mentes(): Promise<boolean> {
+    if (!selectedEmployee || !form) return false;
+    try {
+      const res = await authFetch(`/api/v1/teljesitesi-igazolasok/${projectId}/${selectedEmployee.szamlazo}/save`, {
+        method: "POST",
+        body: JSON.stringify(buildPayload()),
+      });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        alert(`Sikertelen mentés: ${detail?.detail ?? res.status}`);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      alert(`Sikertelen mentés (hálózati hiba): ${err}`);
+      return false;
+    }
+  }
+
+  async function handleSave() {
+    setBusy("save");
+    try {
+      if (!(await mentes())) return;
+      closeForm();
+      router.refresh();
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  /** A küldés előtt megnyitjuk az áttekintőt: a generálás + e-mail egy
+   * lépésben megy, tehát a hibás adat már a megbízottnál landol, és csak új
+   * papírral javítható. */
+  function kuldesInditasa() {
+    if (!selectedEmployee || !form) return;
+    if (!form.netto_osszeg.trim() || Number.isNaN(Number(form.netto_osszeg)) || Number(form.netto_osszeg) <= 0) {
+      alert("Add meg a nettó összeget.");
+      return;
+    }
+    setKuldesNyitva(true);
+  }
+
+  /** Amit a TIG-sablon ténylegesen megkap (lásd buildPayload). */
+  function ellenorzoSorok(): EllenorzoSor[] {
+    if (!form) return [];
+    const netto = form.netto_osszeg.trim() ? Number(form.netto_osszeg) : null;
+    return [
+      { cimke: "Cég neve", ertek: form.ceg_neve },
+      { cimke: "Székhely", ertek: form.szekhely },
+      { cimke: "Adószám", ertek: form.adoszam },
+      { cimke: "Megbízás tárgya", ertek: form.megbizas_targya },
+      {
+        cimke: "Nettó összeg",
+        ertek: netto === null ? null : `${formatFt(netto)}${form.plusz_afa ? " + ÁFA" : ""}`,
+      },
+      { cimke: "Teljesítés ideje", ertek: form.teljesites_szoveg },
+      { cimke: "Keltezés", ertek: form.keltezes },
+      // Csak ha megadták - üresen a szokásos felsorolás megy, az nem hiány.
+      ...(form.projekt_szoveg.trim() ? [{ cimke: "A papíron a projektkódok helyett", ertek: form.projekt_szoveg }] : []),
+    ];
+  }
+
+  async function handleGenerateAndSend() {
+    if (!selectedEmployee || !form) return;
+    setKuldesNyitva(false);
+    setBusy("send");
+    try {
+      const res = await authFetch(
+        `/api/v1/teljesitesi-igazolasok/${projectId}/${selectedEmployee.szamlazo}/generate-and-send`,
+        { method: "POST", body: JSON.stringify(buildPayload()) },
+      );
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        alert(`Sikertelen küldés: ${detail?.detail ?? res.status}`);
+        return;
+      }
+      closeForm();
+      setSelectedId("");
+      router.refresh();
+    } catch (err) {
+      alert(`Sikertelen küldés (hálózati hiba): ${err}`);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  function generalasInditasa() {
+    if (!selectedEmployee || !form) return;
+    if (!form.netto_osszeg.trim() || Number.isNaN(Number(form.netto_osszeg)) || Number(form.netto_osszeg) <= 0) {
+      alert("Add meg a nettó összeget.");
+      return;
+    }
+    setGeneralasNyitva(true);
+  }
+
+  /** Csak generálás: a TIG elkészül és felkerül a rendszerbe (kész állapot,
+   * mehet a számla), de e-mail NEM megy ki - lásd backend
+   * performance_certificates.generalas_kikuldes_nelkul. */
+  async function handleGeneralas() {
+    if (!selectedEmployee || !form) return;
+    setGeneralasNyitva(false);
+    setBusy("gen");
+    try {
+      const res = await authFetch(`/api/v1/teljesitesi-igazolasok/${projectId}/${selectedEmployee.szamlazo}/generalas`, {
+        method: "POST",
+        body: JSON.stringify(buildPayload()),
+      });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        alert(`Sikertelen generálás: ${detail?.detail ?? res.status}`);
+        return;
+      }
+      closeForm();
+      setSelectedId("");
+      router.refresh();
+    } catch (err) {
+      alert(`Sikertelen generálás (hálózati hiba): ${err}`);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  /** Kihagyás - az indoklás kötelező (lásd KihagyasDialog és a backend
+   * skip_tig végpontja): egy hiányzó teljesítési igazolásról fél év múlva
+   * kiderülnie kell, hogy szándékos volt. */
+  async function handleSkip(indok: string) {
+    if (!selectedEmployee) return;
+    setKihagyasNyitva(false);
+    setBusy("skip");
+    try {
+      const res = await authFetch(`/api/v1/teljesitesi-igazolasok/${projectId}/${selectedEmployee.szamlazo}/skip`, {
+        method: "POST",
+        // Üres kiválasztásnál NULL megy: az azt jelenti, hogy maradjon, ami a
+        // bejegyzésen van. Üres LISTA hibát adna, és a kihagyás elhasalna
+        // azon, hogy a tételek épp töltődnek.
+        body: JSON.stringify({ kihagyas_oka: indok, tetelek: buildTetelek() || null }),
+      });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        alert(`Sikertelen kihagyás: ${detail?.detail ?? res.status}`);
+        return;
+      }
+      closeForm();
+      setSelectedId("");
+      router.refresh();
+    } catch (err) {
+      alert(`Sikertelen kihagyás (hálózati hiba): ${err}`);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const busyState = busy !== null;
+
+  return (
+    <div>
+      <p className="mb-3 text-[13px] text-text-secondary">
+        {pending.length === 0
+          ? "Nincs olyan fél a projekten, akinek teljesítési igazolást kellene készíteni."
+          : `${pending.length} félnek kell teljesítési igazolás (nem belsős - a keretszerződéseseket is beleértve). Egy TIG több ember és több projekt munkáját is igazolhatja.`}
+      </p>
+      {pending.length > 0 && (
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] text-text-muted">Számlázó fél</label>
+            <KeresosSelect
+              value={selectedId || null}
+              options={pending.map((p) => ({
+                value: p.szamlazo,
+                label: `${p.cimke}${p.draft ? ` (${p.draft.allapot ?? "Készítés alatt"})` : ""}`,
+              }))}
+              onChange={setSelectedId}
+              placeholder="Válassz embert…"
+              className="min-w-[220px]"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={openForm}
+            disabled={!selectedId}
+            className="rounded-[var(--radius)] border border-border bg-bg-accent px-3 py-1.5 text-[13px] text-text-accent hover:opacity-90 disabled:opacity-50"
+          >
+            Teljesítési igazolás készítése
+          </button>
+        </div>
+      )}
+
+      {selectedEmployee && form && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6" {...vedettOverlayZaras(busyState ? undefined : closeForm)}>
+          <div
+            className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[var(--radius)] border border-border bg-surface-2 p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="mb-1 text-[15px] font-medium text-text-primary">Teljesítési igazolás – {selectedEmployee.full_name}</h3>
+            <p className="mb-1 text-[12px] text-text-muted">
+              TIG állapot: {selectedEmployee.draft?.allapot ?? "Nincs elkezdve"}
+            </p>
+            {/* Ha még nincs mentett TIG, de van szerződés, az űrlap ONNAN
+                indul - mondjuk is meg, hogy honnan jöttek az adatok, és hogy
+                nyugodtan át lehet írni őket. */}
+            {!selectedEmployee.draft && selectedEmployee.szerzodes && (
+              <p className="mb-4 text-[12px] text-text-secondary">
+                Az adatok az eseti szerződésből vannak előtöltve
+                {selectedEmployee.szerzodes.allapot ? ` (${selectedEmployee.szerzodes.allapot})` : ""} – itt
+                szabadon átírhatók, a szerződéshez nem nyúlnak.
+              </p>
+            )}
+            {(selectedEmployee.draft || !selectedEmployee.szerzodes) && <div className="mb-4" />}
+            {/* Kitöltés mentett adatokból (a felhasználó kérése): a fél
+                adatlapja + korábbi TIG-jei/szerződései közül választva a
+                cégadat-mezők kitöltődnek - gépelni csak az újat kell. */}
+            <TigAdatValaszto
+              szamlazoKulcs={selectedEmployee.szamlazo}
+              disabled={busyState}
+              onValaszt={(j) =>
+                setForm((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        ceg_neve: j.ceg_neve ?? prev.ceg_neve,
+                        szekhely: j.szekhely ?? prev.szekhely,
+                        adoszam: j.adoszam ?? prev.adoszam,
+                        megbizas_targya: j.megbizas_targya ?? prev.megbizas_targya,
+                        plusz_afa: j.plusz_afa ?? prev.plusz_afa,
+                      }
+                    : prev,
+                )
+              }
+            />
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Field label="Megbízott neve">
+                <input
+                  value={form.ceg_neve}
+                  onChange={(e) => update("ceg_neve", e.target.value)}
+                  disabled={busyState}
+                  className={inputClass}
+                />
+              </Field>
+              <Field label="Megbízott székhely">
+                <input
+                  value={form.szekhely}
+                  onChange={(e) => update("szekhely", e.target.value)}
+                  disabled={busyState}
+                  className={inputClass}
+                />
+              </Field>
+              <Field label="Megbízott adószám">
+                <input
+                  value={form.adoszam}
+                  onChange={(e) => update("adoszam", e.target.value)}
+                  disabled={busyState}
+                  className={inputClass}
+                />
+              </Field>
+              <Field label="Megbízás tárgya">
+                <input
+                  value={form.megbizas_targya}
+                  onChange={(e) => update("megbizas_targya", e.target.value)}
+                  disabled={busyState}
+                  className={inputClass}
+                />
+              </Field>
+              {/* Szabad szöveg, nem dátum: a papírra nem mindig egy naptári
+                  intervallum kerül ("2026. július", felsorolás, stb.). */}
+              <Field label="Teljesítés ideje">
+                <input
+                  value={form.teljesites_szoveg}
+                  onChange={(e) => update("teljesites_szoveg", e.target.value)}
+                  disabled={busyState}
+                  placeholder="Pl. 2026.07.06. - 2026.07.08. vagy 2026. július"
+                  className={inputClass}
+                />
+              </Field>
+              <Field label="Nettó összeg (Ft) *">
+                <input
+                  type="number"
+                  value={form.netto_osszeg}
+                  onChange={(e) => update("netto_osszeg", e.target.value)}
+                  disabled={busyState}
+                  className={inputClass}
+                />
+              </Field>
+              <Field label="PLUSZ áfa">
+                <label className="flex items-center gap-2 py-1.5 text-[13px] text-text-primary">
+                  <input
+                    type="checkbox"
+                    checked={form.plusz_afa}
+                    onChange={(e) => update("plusz_afa", e.target.checked)}
+                    disabled={busyState}
+                  />
+                  {form.plusz_afa ? "Igen" : "Nem"}
+                </label>
+              </Field>
+              <Field label="Bruttó összeg (Ft)">
+                <p className="py-1.5 text-[13px] text-text-secondary">
+                  {bruttoOsszeg != null ? `${bruttoOsszeg.toLocaleString("hu-HU")} Ft` : "–"}
+                </p>
+              </Field>
+              <Field label="Keltezés dátuma">
+                <input
+                  type="date"
+                  value={form.keltezes}
+                  onChange={(e) => update("keltezes", e.target.value)}
+                  disabled={busyState}
+                  className={inputClass}
+                />
+              </Field>
+            </div>
+
+            <PapirTetelValaszto
+              tetelek={valaszthato}
+              kivalasztott={kivalasztott}
+              osszegek={osszegek}
+              toltodik={tetelekToltodnek}
+              tiltva={busyState}
+              onBillen={billen}
+              onOsszeg={(kulcs, ertek) => setOsszegek((elozo) => ({ ...elozo, [kulcs]: ertek }))}
+              onTobb={(kulcsok, be) =>
+                setKivalasztott((elozo) => {
+                  const uj = new Set(elozo);
+                  for (const k of kulcsok) {
+                    if (be) uj.add(k);
+                    else uj.delete(k);
+                  }
+                  return uj;
+                })
+              }
+              fejOsszeg={form.netto_osszeg}
+              cim="Mit igazol ez a TIG?"
+              // Ha a SZERZŐDÉS több forgatásra szól, a TIG alapból ugyanazokra
+              // van kipipálva (lásd backend _szerzodes_szerinti_parok) - ezt ki
+              // is mondjuk, mert különben úgy tűnne, hogy véletlenül került rá
+              // a többi nap. Innentől egy TIG-hez egy számla tartozik.
+              leiras={
+                szerzodesNapok > 1
+                  ? `A szerződés ${szerzodesNapok} forgatásra szól, ezért alapból mind ki van pipálva: egy igazolás készül róluk, és utána a számlát is elég egyszer feltölteni. Ha mégis külön kell, vedd ki a pipát. A tételenkénti összeg elhagyható – ha nem tudható, mi mennyibe került, elég a fenti nettó összeg.`
+                  : "Pipáld ki, kinek a munkája kerül erre az egy igazolásra. Más projekt munkája is rátehető, ha egy számlán érkezik. A tételenkénti összeg elhagyható – ha nem tudható, mi mennyibe került, elég a fenti nettó összeg."
+              }
+            />
+
+            <PapirSokProjekt
+              tobbProjekt={kijeloltProjektek.length > 1}
+              projektSzoveg={form.projekt_szoveg}
+              emailTargy={form.email_targy}
+              onProjektSzoveg={(v) => update("projekt_szoveg", v)}
+              onEmailTargy={(v) => update("email_targy", v)}
+              felsorolas={[...new Set(kijeloltProjektek)].join(", ")}
+              mitIrHelyette="a projektkódok"
+              tiltva={busyState}
+            />
+            <div className="mt-5 flex flex-wrap justify-end gap-3 border-t border-border pt-4">
+              <button
+                type="button"
+                onClick={closeForm}
+                disabled={busyState}
+                className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
+              >
+                Bezárás
+              </button>
+              <button
+                type="button"
+                onClick={() => setKihagyasNyitva(true)}
+                disabled={busyState}
+                className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
+              >
+                {busy === "skip" ? "Kihagyás…" : "Kihagyás (TIG nélkül)"}
+              </button>
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={busyState}
+                className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
+              >
+                {busy === "save" ? "Mentés…" : "Mentés"}
+              </button>
+              {/* A kiküldés kihagyása: kész TIG feltöltése. A bejegyzés
+                  ugyanúgy "Kiküldve" lesz, tehát mehet rá számla. */}
+              <SajatPapirFeltoltes
+                cimke="Saját TIG feltöltése"
+                feltoltesPath={`/api/v1/teljesitesi-igazolasok/${projectId}/${selectedEmployee.szamlazo}/sajat-fajl`}
+                elokeszit={mentes}
+                disabled={busyState}
+                onKesz={() => {
+                  closeForm();
+                  setSelectedId("");
+                  router.refresh();
+                }}
+              />
+              {/* ELŐNÉZET (a felhasználó kérése): ugyanaz az ablak, mint a
+                  küldés előtti ellenőrzés - benne a levél és a kitöltött
+                  dokumentum, és onnan lehet továbbküldeni. */}
+              <button
+                type="button"
+                onClick={kuldesInditasa}
+                disabled={busyState}
+                className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
+              >
+                Előnézet
+              </button>
+              {/* CSAK GENERÁLÁS (a felhasználó kérése): elkészül és felkerül a
+                  rendszerbe, de nem megy ki e-mailben. */}
+              <button
+                type="button"
+                onClick={generalasInditasa}
+                disabled={busyState}
+                title="A TIG elkészül és felkerül a rendszerbe, de e-mailben nem megy ki"
+                className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
+              >
+                {busy === "gen" ? "Generálás…" : "Csak generálás (nem küldi ki)"}
+              </button>
+              <button
+                type="button"
+                onClick={kuldesInditasa}
+                disabled={busyState}
+                className="rounded-[var(--radius)] border border-border bg-bg-accent px-3 py-1.5 text-[13px] text-text-accent hover:opacity-90 disabled:opacity-50"
+              >
+                {busy === "send" ? "Küldés…" : "Generálás és küldés"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {kuldesNyitva && selectedEmployee && (
+        <KuldesEllenorzo
+          cim="Teljesítési igazolás kiküldése"
+          bevezeto="A dokumentum ezekkel az adatokkal generálódik, és azonnal ki is megy e-mailben. Lent az előnézet: pontosan ez menne ki - a levelet ott át is írhatod."
+          cimzett={selectedEmployee.email}
+          sorok={ellenorzoSorok()}
+          tetelek={valaszthato
+            .filter((t) => kivalasztott.has(tetelKulcs(t)))
+            .map((t) => `${t.employee_nev} – ${t.projektkod ? `${t.projektkod} – ` : ""}${t.project_nev ?? ""}`)}
+          gombCimke="Generálás és küldés"
+          onMegse={() => setKuldesNyitva(false)}
+          onKuld={handleGenerateAndSend}
+        >
+          <PapirElonezet
+            path={`/api/v1/teljesitesi-igazolasok/${projectId}/${selectedEmployee.szamlazo}/elonezet`}
+            payload={buildPayload()}
+            szerkeszto={{
+              targy: form?.email_targy ?? "",
+              szoveg: form?.email_szoveg ?? "",
+              onChange: (v) => {
+                if (v.targy !== undefined) update("email_targy", v.targy);
+                if (v.szoveg !== undefined) update("email_szoveg", v.szoveg);
+              },
+            }}
+          />
+        </KuldesEllenorzo>
+      )}
+      {generalasNyitva && selectedEmployee && (
+        <KuldesEllenorzo
+          cim="Teljesítési igazolás generálása – kiküldés nélkül"
+          bevezeto="A dokumentum ezekkel az adatokkal generálódik és felkerül a rendszerbe (kész TIG, jöhet a számla), de e-mailben NEM megy ki. Lent az előnézet."
+          cimzett={selectedEmployee.email}
+          emailNelkul
+          sorok={ellenorzoSorok()}
+          tetelek={valaszthato
+            .filter((t) => kivalasztott.has(tetelKulcs(t)))
+            .map((t) => `${t.employee_nev} – ${t.projektkod ? `${t.projektkod} – ` : ""}${t.project_nev ?? ""}`)}
+          gombCimke="Generálás (kiküldés nélkül)"
+          onMegse={() => setGeneralasNyitva(false)}
+          onKuld={handleGeneralas}
+        >
+          <PapirElonezet path={`/api/v1/teljesitesi-igazolasok/${projectId}/${selectedEmployee.szamlazo}/elonezet`} payload={buildPayload()} csakDokumentum />
+        </KuldesEllenorzo>
+      )}
+      {kihagyasNyitva && (
+      <IndoklasDialog
+        cim={`${selectedEmployee?.full_name ?? "A megbízott"} kihagyása`}
+        leiras="A projekt teljesítési igazolás nélkül zárul vele. Írd le, miért - egy hiányzó TIG-ről később ebből derül ki, hogy szándékos volt."
+        onMegse={() => setKihagyasNyitva(false)}
+        mezoCimke="A kihagyás oka"
+        placeholder="Pl. a munkát a partnercég számlázza, nálunk nincs vele szerződés"
+        gombCimke="Kihagyás"
+        onKesz={handleSkip}
+      />
+      )}
+    </div>
+  );
+}
+
+const inputClass =
+  "w-full rounded-[var(--radius)] border border-border bg-surface-3 px-2 py-1.5 text-[13px] text-text-primary focus:outline-none";
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <label className="text-[11px] text-text-muted">{label}</label>
+      {children}
+    </div>
+  );
+}

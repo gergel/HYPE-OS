@@ -1,16 +1,37 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Eye, EyeOff } from "lucide-react";
+import { Logo } from "@/components/Logo";
+import { setToken } from "@/lib/authFetch";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+/** Csak saját, alkalmazáson belüli útvonalra irányítunk vissza - a "next"
+ * paraméter az URL-ből jön, tehát külső címet is bele lehetne írni. */
+function biztonsagosCel(next: string | null): string {
+  if (!next || !next.startsWith("/") || next.startsWith("//") || next.startsWith("/login")) return "/dashboard";
+  return next;
+}
+
 export default function LoginPage() {
-  const router = useRouter();
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // Jelszó-megjelenítés kapcsoló (a felhasználó kérése): a szemecske ikonnal
+  // ellenőrizhető, mit gépelt be az ember.
+  const [jelszoLatszik, setJelszoLatszik] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -29,8 +50,14 @@ export default function LoginPage() {
         return;
       }
       const data = await res.json();
-      localStorage.setItem("hype_os_token", data.access_token);
-      router.push("/dashboard");
+      setToken(data.access_token);
+      // TELJES oldalbetöltéssel megyünk tovább (nem router.push), mert a
+      // kliens-oldali route cache-ben ott maradhat a kiléptetés előtti,
+      // "loginra átirányított" változata a céloldalnak - egy sima kliens-
+      // oldali navigáció azt játszaná vissza, és úgy tűnne, mintha megint
+      // bejelentkezést kérne. Ha volt hova tartott, oda visszük vissza.
+      window.location.replace(biztonsagosCel(searchParams.get("next")));
+      return;
     } catch {
       setError("Nem sikerült elérni a backend API-t.");
     } finally {
@@ -39,34 +66,47 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex flex-1 items-center justify-center p-6">
+    <div className="flex flex-1 items-center justify-center p-8">
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-sm rounded-[var(--radius-lg)] border border-border bg-surface-2 p-6"
+        className="fade-in w-full max-w-[380px] rounded-[var(--radius-xl)] border border-border bg-surface-2 p-8"
       >
-        <p className="mb-1 text-lg font-medium text-text-primary">HYPE OS</p>
-        <p className="mb-5 text-[13px] text-text-secondary">Jelentkezz be a folytatáshoz</p>
+        {/* Ugyanaz a szöveges logó, mint az oldalsávban - a szín témát követ
+            (világoson fekete, sötéten fehér), lásd components/Logo.tsx. */}
+        <Logo className="mb-2 h-7" />
+        <p className="mb-7 text-[13px] text-text-muted">Jelentkezz be a folytatáshoz</p>
 
-        <label className="mb-3 block">
-          <span className="mb-1 block text-[13px] text-text-secondary">Email</span>
+        <label className="mb-4 block">
+          <span className="mb-1.5 block text-[13px] text-text-secondary">Email</span>
           <input
             type="email"
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-[var(--radius)] border border-border bg-surface-1 px-3 py-2 text-[13px] text-text-primary outline-none focus:border-text-accent"
+            className="field w-full"
           />
         </label>
 
-        <label className="mb-4 block">
-          <span className="mb-1 block text-[13px] text-text-secondary">Jelszó</span>
-          <input
-            type="password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-[var(--radius)] border border-border bg-surface-1 px-3 py-2 text-[13px] text-text-primary outline-none focus:border-text-accent"
-          />
+        <label className="mb-6 block">
+          <span className="mb-1.5 block text-[13px] text-text-secondary">Jelszó</span>
+          <div className="relative">
+            <input
+              type={jelszoLatszik ? "text" : "password"}
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="field w-full pr-10"
+            />
+            <button
+              type="button"
+              onClick={() => setJelszoLatszik((v) => !v)}
+              aria-label={jelszoLatszik ? "Jelszó elrejtése" : "Jelszó megjelenítése"}
+              tabIndex={-1}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-text-muted hover:text-text-primary"
+            >
+              {jelszoLatszik ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
         </label>
 
         {error && <p className="mb-3 text-[13px] text-text-danger">{error}</p>}
@@ -74,7 +114,7 @@ export default function LoginPage() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full rounded-[var(--radius)] bg-bg-accent px-3 py-2 text-[13px] font-medium text-text-accent disabled:opacity-50"
+          className="btn btn-primary w-full !py-2.5"
         >
           {loading ? "Belépés..." : "Belépés"}
         </button>

@@ -1,4 +1,4 @@
-from sqlalchemy import ForeignKey, String
+from sqlalchemy import JSON, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -29,12 +29,23 @@ class Contact(TimestampMixin, Base):
     __tablename__ = "contacts"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    client_id: Mapped[int] = mapped_column(ForeignKey("clients.id"), nullable=False)
+    #: Ügyfél NÉLKÜL is felvehető (a felhasználó kérése: az utómunka
+    #: adatlapról helyben felvett új kontaktnál ne legyen kötelező) - a
+    #: felületek ilyenkor ügyfélnév nélkül mutatják.
+    client_id: Mapped[int | None] = mapped_column(ForeignKey("clients.id"), nullable=True)
 
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
     first_name: Mapped[str | None] = mapped_column(String(120))
     last_name: Mapped[str | None] = mapped_column(String(120))
     email: Mapped[str | None] = mapped_column(String(255))
     phone: Mapped[str | None] = mapped_column(String(50))
+
+    # a 'Megrendelői kontaktok' Notion tábla maradék mezői
+    keresztnev_notion: Mapped[str | None] = mapped_column(String(120), comment="Keresztnév (formula)")
+    vezeteknev_notion: Mapped[str | None] = mapped_column(String(120), comment="Vezeték név (formula)")
+    torolt_anyagok_notion_ids: Mapped[dict | None] = mapped_column(JSON, comment="Törölt anyagok (relation)")
+    kreativ_team_database_notion_ids: Mapped[dict | None] = mapped_column(
+        JSON, comment="Kreatív team database (relation)"
+    )
 
     client: Mapped["Client"] = relationship(back_populates="contacts")

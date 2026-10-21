@@ -1,29 +1,153 @@
 @import "tailwindcss";
+@import "./portal-theme.css";
+@import "./krumpello-theme.css";
+
+/* ─────────────────────────────────────────────────────────────────────────
+   HYPE OS vizuális nyelv: "megmunkált alumínium és fekete titán".
+
+   A felületet naponta sok órán át nézik, ezért a vizuális KÉNYELEM előbbre
+   való, mint a látványos effektek: nincs színes ragyogás, nincs átmenet a
+   háttéren, nincs erős árnyék. A színt kizárólag az ADAT hordozza (állapotok,
+   figyelmeztetések) - a keret maga szürke-grafit marad, hogy a szem a
+   tartalomra álljon rá.
+
+   Minden érték TOKEN. A komponensek soha nem írnak be nyers hex-kódot, így a
+   teljes megjelenés innen hangolható.
+   ───────────────────────────────────────────────────────────────────────── */
 
 :root {
-  --background: #0a0a0a;
-  --foreground: #ededed;
+  /* Alapfelületek - a sík fekete helyett enyhén hideg grafit, hogy a fehér
+     szöveg ne "vibráljon" rajta hosszú munka közben. */
+  --background: #08090b;
+  --foreground: #f5f5f5;
 
-  --surface-1: #141414;
-  --surface-2: #1a1a1a;
-  --surface-3: #202020;
-  --border: rgba(255, 255, 255, 0.08);
+  /* surface-1: a tartalomnál SÖTÉTEBB váz (oldalsáv, fejléc),
+     surface-2: a kártyák felülete,
+     surface-3: kártyán belüli kiemelés (input, hover, badge). */
+  --surface-1: #0c0d10;
+  --surface-2: #101215;
+  --surface-3: #14171c;
+  --surface-4: #1a1e24;
+  --border: rgba(255, 255, 255, 0.06);
+  --border-strong: rgba(255, 255, 255, 0.11);
 
-  --text-primary: #f4f4f5;
-  --text-secondary: #a1a1aa;
-  --text-muted: #71717a;
-  --text-accent: #93c5fd;
-  --bg-accent: rgba(147, 197, 253, 0.12);
+  --text-primary: #f5f5f5;
+  --text-secondary: #a3a8b3;
+  --text-muted: #6f7682;
 
-  --text-success: #86efac;
-  --bg-success: rgba(34, 197, 94, 0.14);
-  --text-warning: #fbbf24;
-  --bg-warning: rgba(217, 119, 6, 0.16);
-  --text-danger: #fca5a5;
-  --bg-danger: rgba(220, 38, 38, 0.16);
+  /* Akcentus: meleg, matt "eloxált alumínium". Szándékosan NEM telített
+     márkaszín - a kiemelést a kontraszt adja, nem a színerő. */
+  --text-accent: #d4d0c8;
+  --bg-accent: rgba(212, 208, 200, 0.09);
+  --accent-solid: #d4d0c8;
+  --accent-solid-hover: #e6e2da;
+  /* Visszafelé kompatibilis: néhány komponens még hivatkozik rá. Már nem
+     színátmenet, hanem egyszínű titán-felület. */
+  --accent-gradient: #22262c;
 
-  --radius: 8px;
-  --radius-lg: 12px;
+  /* Állapotszínek: visszafogottak, de egymástól jól megkülönböztethetőek.
+     Nem "neon zöld/piros", hanem szűrő-üveg tónusok. */
+  --text-success: #6d8f72;
+  --bg-success: rgba(109, 143, 114, 0.14);
+  --text-warning: #b89b6a;
+  --bg-warning: rgba(184, 155, 106, 0.14);
+  --text-danger: #b26b6b;
+  --bg-danger: rgba(178, 107, 107, 0.14);
+
+  /* Kategória-tónusok (dashboard kártyák, badge-ek). A régi élénk paletta
+     helyett tompított, egymáshoz hangolt árnyalatok - a megkülönböztetéshez
+     elég, a szemet nem terhelik. */
+  --text-blue: #7d8fa6;
+  --bg-blue: rgba(125, 143, 166, 0.13);
+  --text-teal: #6d9490;
+  --bg-teal: rgba(109, 148, 144, 0.13);
+  --text-orange: #b0906f;
+  --bg-orange: rgba(176, 144, 111, 0.13);
+  --text-pink: #a88b95;
+  --bg-pink: rgba(168, 139, 149, 0.13);
+  --text-yellow: #b3a173;
+  --bg-yellow: rgba(179, 161, 115, 0.13);
+
+  /* Sarokkerekítés: nagy, de nem "buborék". A kis sugár az interaktív
+     elemeké (gomb, input), a nagy a kártyáké. */
+  --radius: 10px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+
+  /* 8px-es rács. A komponensek ezekre hivatkoznak, hogy a térközök ne
+     szóródjanak szét fájlonként. */
+  --space-1: 8px;
+  --space-2: 12px;
+  --space-3: 16px;
+  --space-4: 24px;
+  --space-5: 32px;
+  --space-6: 48px;
+  --space-7: 64px;
+
+  /* Mozgás: rövid, lineárishoz közeli - jelez, de nem vonja el a figyelmet. */
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --dur-fast: 150ms;
+  --dur: 200ms;
+  --dur-slow: 250ms;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   VILÁGOS NÉZET
+
+   Ugyanaz az anyag, másik megvilágításban: nem "kifordított sötét", hanem
+   meleg papír és matt alumínium. A SZEREPEK viszont pontosan ugyanazok, ezért
+   a surface-1 itt is SÖTÉTEBB a tartalomnál (a váz: oldalsáv, fejléc), a
+   surface-2 pedig a kártyák világos lapja - így egyetlen komponenst sem kell
+   átírni, elég a tokeneket felülírni.
+
+   Nem `prefers-color-scheme`: a rendszer szándékosan sötét alapú, és aki nem
+   választ, annak nem akarjuk átrendezni a felületét az operációs rendszere
+   beállítása miatt. A választás EMBERHEZ tartozik, nem géphez - a
+   `data-theme` értékét a bejelentkezett munkatárs mentett beállítása adja
+   (lásd components/TemaKapcsolo.tsx).
+
+   Az állapotszínek nem ugyanazok az árnyalatok: a sötét nézet halk tónusai
+   fehér papíron olvashatatlanok lennének, ezért itt sötétebb, telítettebb
+   párjuk áll - a SZEREPÜK (siker/figyelmeztetés/hiba) változatlan.
+   ───────────────────────────────────────────────────────────────────────── */
+:root[data-theme="light"] {
+  --background: #f4f4f2;
+  --foreground: #16181c;
+
+  --surface-1: #eaeae6;
+  --surface-2: #ffffff;
+  --surface-3: #f1f1ed;
+  --surface-4: #e4e4df;
+  --border: rgba(16, 18, 22, 0.1);
+  --border-strong: rgba(16, 18, 22, 0.18);
+
+  --text-primary: #16181c;
+  --text-secondary: #55595f;
+  --text-muted: #74787f;
+
+  --text-accent: #5c5646;
+  --bg-accent: rgba(92, 86, 70, 0.1);
+  --accent-solid: #5c5646;
+  --accent-solid-hover: #423d31;
+  --accent-gradient: #e4e4df;
+
+  --text-success: #3f6446;
+  --bg-success: rgba(63, 100, 70, 0.12);
+  --text-warning: #7a5d20;
+  --bg-warning: rgba(122, 93, 32, 0.13);
+  --text-danger: #8f3b3b;
+  --bg-danger: rgba(143, 59, 59, 0.12);
+
+  --text-blue: #45566d;
+  --bg-blue: rgba(69, 86, 109, 0.11);
+  --text-teal: #345f5a;
+  --bg-teal: rgba(52, 95, 90, 0.11);
+  --text-orange: #7a5330;
+  --bg-orange: rgba(122, 83, 48, 0.11);
+  --text-pink: #764c58;
+  --bg-pink: rgba(118, 76, 88, 0.11);
+  --text-yellow: #6d5c1f;
+  --bg-yellow: rgba(109, 92, 31, 0.11);
 }
 
 @theme inline {
@@ -32,7 +156,9 @@
   --color-surface-1: var(--surface-1);
   --color-surface-2: var(--surface-2);
   --color-surface-3: var(--surface-3);
+  --color-surface-4: var(--surface-4);
   --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
   --color-text-primary: var(--text-primary);
   --color-text-secondary: var(--text-secondary);
   --color-text-muted: var(--text-muted);
@@ -44,6 +170,16 @@
   --color-bg-warning: var(--bg-warning);
   --color-text-danger: var(--text-danger);
   --color-bg-danger: var(--bg-danger);
+  --color-text-blue: var(--text-blue);
+  --color-bg-blue: var(--bg-blue);
+  --color-text-teal: var(--text-teal);
+  --color-bg-teal: var(--bg-teal);
+  --color-text-orange: var(--text-orange);
+  --color-bg-orange: var(--bg-orange);
+  --color-text-pink: var(--text-pink);
+  --color-bg-pink: var(--bg-pink);
+  --color-text-yellow: var(--text-yellow);
+  --color-bg-yellow: var(--bg-yellow);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -51,9 +187,295 @@
 body {
   background: var(--background);
   color: var(--text-primary);
-  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  /* A rendszer saját betűje (macOS-en SF Pro) élvez elsőbbséget, utána az
+     Inter-rokon webfont - így a felület natívnak hat azon a gépen, amin
+     dolgoznak vele. */
+  font-family:
+    -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", var(--font-sans), "Inter",
+    "Segoe UI", Roboto, Arial, sans-serif;
+  font-feature-settings: "cv01", "cv03", "ss01";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  /* Védőháló: a viewport meta tag (lásd app/layout.tsx) megoldja, hogy
+     mobilon ne "asztali" méretben töltsön be az oldal, de ha egy komponens
+     mégis szélesebb tartalmat rendelne (pl. egy elfelejtett overflow-x-auto
+     egy táblázatnál), ez megakadályozza, hogy emiatt a TELJES oldal
+     vízszintesen elcsússzon/pásztázhatóvá váljon - a hibás komponens ilyenkor
+     saját magában vágódik le, nem viszi magával az egész layoutot. */
+  overflow-x: hidden;
 }
 
-* {
-  border-color: var(--border);
+@layer base {
+  /* A keret-szín alapértelmezése. SZÁNDÉKOSAN @layer base-ben: réteg nélkül
+     ez a szabály a kaszkádban legyőzte a Tailwind utility-ket, ezért egyetlen
+     `hover:border-*` osztály sem érvényesült sehol az alkalmazásban - emiatt
+     kellett korábban box-shadow-val pótolni a hover-kereteket. */
+  * {
+    border-color: var(--border);
+  }
+
+  /* Fókusz: billentyűzetes navigációnál látható, egérrel nem zavaró. */
+  :focus-visible {
+    outline: 1px solid var(--border-strong);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: rgba(212, 208, 200, 0.18);
+  }
+  :root[data-theme="light"] ::selection {
+    background: rgba(92, 86, 70, 0.2);
+  }
+
+  /* Diszkrét görgetősáv - a natív, világos sáv kilógna a sötét felületből. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  *::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.1);
+    border: 3px solid transparent;
+    background-clip: content-box;
+    border-radius: 999px;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(255, 255, 255, 0.18);
+  }
+
+  /* A görgetősáv az egyetlen elem, ami nem tokenből él (a natív vezérlő nem
+     ismeri a változóinkat ott, ahol színt vár) - világos nézetben ezért a
+     fehér helyett sötét tintát kap, különben eltűnne a papírfelületen. */
+  :root[data-theme="light"] * {
+    scrollbar-color: rgba(16, 18, 22, 0.2) transparent;
+  }
+  :root[data-theme="light"] *::-webkit-scrollbar-thumb {
+    background-color: rgba(16, 18, 22, 0.16);
+  }
+  :root[data-theme="light"] *::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(16, 18, 22, 0.26);
+  }
+}
+
+@layer components {
+  /* ── Tipográfiai lépcső ────────────────────────────────────────────────
+     Egy adatsűrű munkaeszközben a cím dolga a tájékozódás, nem a látvány:
+     a lépcső határozott, de nem foglal el egy fél képernyőt. */
+  .t-page {
+    font-size: 28px;
+    line-height: 1.15;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+    /* A szóköz nélküli, hosszú címek (pl. "TTM_Horizon_miniszteri_szoveg_...")
+       is törjenek sort: különben kilógnak, és telefonon az egész oldal
+       összezsugorodik (a felhasználó jelezte az Utómunka adatlapnál). */
+    overflow-wrap: anywhere;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .t-section {
+    font-size: 20px;
+    line-height: 1.25;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    color: var(--text-primary);
+  }
+  .t-card {
+    font-size: 15px;
+    line-height: 1.3;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--text-primary);
+  }
+  /* Mikro-címke (mezőnév, oszlopfejléc). SZÁNDÉKOSAN nincs rajta
+     text-transform: uppercase - egyrészt a hosszú magyar mezőnevek
+     ("Nem diszponálandó (meeting)") csupa nagybetűvel nehezebben olvashatók,
+     másrészt a text-transform a MÁSOLT és a képernyőolvasó által felolvasott
+     szöveget is átírja. A "halk címke" hatást a méret, a betűköz és a szín
+     adja, nem a kisbetű-eltüntetés. */
+  .t-label {
+    font-size: 11.5px;
+    line-height: 1.4;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    color: var(--text-muted);
+  }
+
+  /* A váz (oldalsáv) csoportcímkéi: rövid, állandó szavak, itt a nagybetű
+     jól elkülöníti a navigációtól - és nem adat, tehát a szövegátírás sem
+     zavar. */
+  .t-nav-group {
+    font-size: 11px;
+    line-height: 1.4;
+    font-weight: 500;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  /* ── Gombok ────────────────────────────────────────────────────────────
+     Elsődleges: matt titán felület. Másodlagos: szellem-gomb. Veszély:
+     visszafogott vörös, csak a szöveg színez. */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border-radius: var(--radius);
+    padding: 7px 13px;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.2;
+    white-space: nowrap;
+    border: 1px solid transparent;
+    transition:
+      background-color var(--dur) var(--ease),
+      border-color var(--dur) var(--ease),
+      color var(--dur) var(--ease),
+      opacity var(--dur) var(--ease);
+  }
+  .btn:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+  .btn-primary {
+    background: var(--surface-4);
+    border-color: var(--border-strong);
+    color: var(--text-primary);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: #22262c;
+    border-color: rgba(255, 255, 255, 0.16);
+  }
+  /* Világos nézetben a hover nem világosodik, hanem SÖTÉTEDIK - a "megnyomva"
+     érzet ott ez, és a titán-hex fehér papíron amúgy is fekete folt lenne. */
+  :root[data-theme="light"] .btn-primary {
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  }
+  :root[data-theme="light"] .btn-primary:hover:not(:disabled) {
+    background: #d9d9d3;
+    border-color: rgba(16, 18, 22, 0.24);
+  }
+  .btn-ghost {
+    background: transparent;
+    border-color: var(--border);
+    color: var(--text-secondary);
+  }
+  .btn-ghost:hover:not(:disabled) {
+    background: var(--surface-3);
+    border-color: var(--border-strong);
+    color: var(--text-primary);
+  }
+  .btn-danger {
+    background: transparent;
+    border-color: var(--border);
+    color: var(--text-danger);
+  }
+  .btn-danger:hover:not(:disabled) {
+    background: var(--bg-danger);
+    border-color: rgba(178, 107, 107, 0.35);
+  }
+
+  /* ── Beviteli mezők ────────────────────────────────────────────────────*/
+  .field {
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: var(--surface-3);
+    padding: 7px 11px;
+    font-size: 13px;
+    color: var(--text-primary);
+    transition:
+      border-color var(--dur) var(--ease),
+      background-color var(--dur) var(--ease);
+  }
+  .field::placeholder {
+    color: var(--text-muted);
+  }
+  .field:hover {
+    border-color: var(--border-strong);
+  }
+  .field:focus {
+    outline: none;
+    border-color: var(--border-strong);
+    background: var(--surface-4);
+  }
+
+  /* ── Táblázat ──────────────────────────────────────────────────────────
+     Nem adatbázis-rács, hanem áttekintő nézet: ragadós fejléc, hajszálvékony
+     sorelválasztó, és hover-visszajelzés az egész soron. */
+  .os-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--surface-2);
+    backdrop-filter: blur(8px);
+    font-size: 11.5px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    color: var(--text-muted);
+    padding: 10px 16px 10px 0;
+    box-shadow: inset 0 -1px 0 var(--border);
+    transition: color var(--dur) var(--ease);
+    /* Nowrap: enélkül egy keskeny (telefonos) tartóban a fejléc törne, a
+       tábla pedig sosem nőne szélesebbre a képernyőnél - így viszont a
+       tartó (mindenhol overflow-x-auto, lásd az egyes táblázatos oldalakat)
+       valóban vízszintesen görgethetővé válik, mint a Sheetsben. */
+    white-space: nowrap;
+  }
+  .os-table tbody td {
+    padding: 11px 16px 11px 0;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-primary);
+    white-space: nowrap;
+  }
+  .os-table tbody tr:last-child td {
+    border-bottom: 0;
+  }
+  .os-table tbody tr {
+    transition: background-color var(--dur-fast) var(--ease);
+  }
+
+  /* Beúszó megjelenés - egyszeri, rövid, ismétlődés nélkül. */
+  .fade-in {
+    animation: hype-fade-in var(--dur-slow) var(--ease) both;
+  }
+}
+
+@keyframes hype-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Aki rendszer-szinten kérte a mozgás csökkentését, ne kapjon animációt. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Felugró ablakba (iframe-be) ágyazott részletnézetek: az alkalmazás-keret
+   (felső sáv, vissza-link) elrejtése - lásd app/embed/layout.tsx. A beágyazott
+   útvonalak ugyanazt a page komponenst használják, mint a rendes oldalak,
+   azok pedig maguk renderelik a fejlécüket; itt viszont az ablak saját
+   fejléce már tartalmazza a bezárást és a "teljes oldalon megnyitást". */
+.embed-root [data-app-chrome] {
+  display: none;
 }

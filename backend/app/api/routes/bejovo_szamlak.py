@@ -1,0 +1,989 @@
+"""BEÉRKEZŐ SZÁMLÁK - az érkeztető-piszkozatok HTTP-felülete.
+
+A közös folyamat (e-mail ÉS AI Assistant): services/szamla_erkeztetes.py.
+A jogosultság a Pénzügyek oldalé: aki a kiadásokat látja/írja, az kezeli a
+beérkező számlákat is - kivéve a jóváhagyást, ami "create" jogot kér (éles
+pénzügyi rekordot hoz létre).
+
+ADMIN-TEENDŐK A LEVELEZÉS BEKÖTÉSÉHEZ (kód-oldali beállítás nincs több):
+1. A szamla@hypestab.hu címre érkező levél jusson el a rendszer Gmail-fiókjába
+   (a GMAIL_* hitelesítés fiókja): vagy a fiók ALIAS-a legyen (Google
+   Workspace: Felhasználó → Alternatív e-mail címek), vagy a szamla@ postafiók
+   ÁLLÍTSON BE TOVÁBBÍTÁST erre a fiókra. DNS/MX átállítás NEM kell, a
+   meglévő levelezést nem érinti.
+2. Railway env: SZAMLA_BEJOVO_CIM (alapból szamla@hypestab.hu). Automatikus
+   lehúzás SZÁNDÉKOSAN nincs (a felhasználó kérése): a leveleket a felület
+   "Lehúzás most" gombja hozza be, és csak az OLVASATLANOKAT.
+3. A meglévő GMAIL hitelesítésben a gmail.readonly scope már benne van
+   (lásd services/google_email.GMAIL_SCOPES) - OAuth tokennél ellenőrizd,
+   hogy a token ezzel a scope-pal készült; ha nem, egyszer újra kell kérni."""
+
+from __future__ import annotations
+
+from datetime import date, datetime, timezone
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from pydantic import BaseModel
+from sqlalchemy import delete as sa_delete
+from sqlalchemy import select
+from sqlalchemy import update as sa_update
+from sqlalchemy.orm import Session
+
+from app.core.config import settings
+from app.core.database import get_db
+from app.core.security import require_page_action
+from app.models.auto import Auto
+from app.models.bejovo_szamla import (
+    ALLAPOT_DUPLIKATUM,
+    ALLAPOT_JOVAHAGYVA,
+    ALLAPOT_NEM_SZAMLA,
+    ALLAPOT_PONTOSITAS,
+    ALLAPOTOK,
+    CEL_TIPUSOK,
+    BejovoEmail,
+    BejovoSzamla,
+)
+from app.models.employee import Employee, SystemRole
+from app.models.finance import Expense
+from app.models.internal_performance_certificate import InternalPerformanceCertificate
+from app.models.kotelezettseg import KotelezettsegIdoszak
+from app.models.performance_certificate import PerformanceCertificate
+from app.models.project_code import ProjectCode
+from app.schemas.szamla_draft import Megerosites, SzamlaDraftIn
+from app.services import automatizalas_audit, document_storage, hatter_feladat, szamla_draft, szamla_erkeztetes
+from app.services.szamla_erkeztetes import ErkeztetesHiba
+
+router = APIRouter(prefix="/bejovo-szamlak", tags=["bejovo-szamlak"])
+
+PAGE = "/penzugyek"
+#: A Pénzügyek alap-szerepkör-szűkítését itt sem akarjuk (lásd
+#: routes/finance.py) - a page_permissions grant dönt.
+_MINDEN_SZEREPKOR = tuple(SystemRole)
+
+EMAIL_LEHUZAS_FELADAT = "szamla-email-lehuzas"
+
+
+class BejovoListItem(BaseModel):
+    id: int
+    forras: str
+    allapot: str
+    fajl_nev: str | None
+    url: str | None
+    content_type: str | None
+    email_felado: str | None
+    email_targy: str | None
+    email_beerkezes: datetime | None
+    created_at: datetime
+    dokumentum_tipus: str | None
+    szamlaszam: str | None
+    kibocsato_nev: str | None
+    netto: float | None
+    brutto: float | None
+    penznem: str
+    fizetesi_hatarido: date | None
+    irany: str | None
+    cel_tipus: str | None
+    cel_cimke: str | None = None
+    javaslat_indoklas: str | None = None
+    #: "biztos" | "tobb_lehetseges" | "ellentmondo" | "keves_info" - a lista
+    #: jelvénye ebből mutatja, mennyire megalapozott a javaslat.
+    javaslat_erosseg: str | None = None
+    jovahagyo_nev: str | None = None
+    jovahagyva_at: datetime | None = None
+    rogzitett_expense_id: int | None = None
+    hiba_uzenet: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class BejovoReszlet(BejovoListItem):
+    kinyert: dict | None
+    javaslat: dict | None
+    felhasznaloi_utasitas: str | None
+    kiallitas_datuma: date | None
+    teljesites_datuma: date | None
+    afa_osszeg: float | None
+    kibocsato_adoszam: str | None
+    vevo_nev: str | None
+    vevo_adoszam: str | None
+    email_szoveg: str | None
+    cel_project_code_id: int | None
+    cel_expense_id: int | None
+    cel_certificate_id: int | None
+    cel_internal_certificate_id: int | None
+    cel_kotelezettseg_idoszak_id: int | None
+    cel_auto_id: int | None
+    cel_kp_forgalom_id: int | None
+    cel_employee_id: int | None
+    rogzites_naplo: dict | None
+    duplikatum_bejovo_id: int | None
+    duplikatum_megjegyzes: str | None
+    valtozat_szamla_id: int | None
+    #: A mentett bontás-piszkozat (több projekt egy számlán) - lásd
+    #: models/bejovo_szamla.BejovoSzamla.bontas.
+    bontas: dict | list | None = None
+    #: Strukturált (gépi) piszkozat mezői - lásd services/szamla_draft.py.
+    hivatkozott_projektkod: str | None = None
+    hivatkozott_forgatas_datuma: date | None = None
+    partner_vallalkozas_id: int | None = None
+    partner_employee_id: int | None = None
+    szerzodes_id: int | None = None
+    validacio: dict | None = None
+    #: A jóváhagyáshoz explicit megerősítés kell-e, és ha igen, az aktuális
+    #: pénzügyi adatok ujjlenyomata, amit a megerősítésnek vissza kell adnia.
+    megerosites_kell: bool = False
+    ellenorzo_kod: str | None = None
+
+
+def _cel_cimke(db: Session, b: BejovoSzamla) -> str | None:
+    """Emberi címke a kiválasztott célról - a lista ebből mutatja, hová készül."""
+    if b.cel_tipus in ("kiadas_uj", "mukodesi", "auto"):
+        reszek = []
+        if b.cel_project_code_id:
+            pc = db.get(ProjectCode, b.cel_project_code_id)
+            if pc:
+                reszek.append(pc.projektkod)
+        if b.cel_tipus == "auto" and b.cel_auto_id:
+            auto = db.get(Auto, b.cel_auto_id)
+            if auto:
+                reszek.append(auto.rendszam)
+        if b.cel_tipus == "mukodesi":
+            reszek.append("általános működési költség")
+        return "Új kiadás" + (f" – {' / '.join(reszek)}" if reszek else "")
+    if b.cel_tipus == "kiadas_csatolas" and b.cel_expense_id:
+        exp = db.get(Expense, b.cel_expense_id)
+        return f"Számla a #{b.cel_expense_id} kiadáshoz ({exp.megnevezes})" if exp else None
+    if b.cel_tipus == "kulsos_tig" and b.cel_certificate_id:
+        cert = db.get(PerformanceCertificate, b.cel_certificate_id)
+        if cert:
+            fel = cert.employee.full_name if cert.employee else (cert.vallalkozas.nev if cert.vallalkozas else "?")
+            return f"Külsős TIG #{cert.id} – {fel}"
+    if b.cel_tipus == "belsos_tig" and b.cel_internal_certificate_id:
+        cert = db.get(InternalPerformanceCertificate, b.cel_internal_certificate_id)
+        if cert:
+            return f"Belsős TIG {cert.ev}.{cert.honap:02d}"
+    if b.cel_tipus == "erezsi" and b.cel_kotelezettseg_idoszak_id:
+        idoszak = db.get(KotelezettsegIdoszak, b.cel_kotelezettseg_idoszak_id)
+        if idoszak:
+            return f"E-Rezsi: {idoszak.kotelezettseg.nev} ({idoszak.esedekesseg})"
+    if b.cel_tipus == "kp":
+        return "Házipénztár-tétel bizonylata"
+    if b.cel_tipus == "kimeno":
+        return "Kimenő számla (megrendelői folyamat)"
+    return None
+
+
+def _kimenet(db: Session, b: BejovoSzamla, reszletes: bool = False) -> BejovoListItem | BejovoReszlet:
+    tipus = BejovoReszlet if reszletes else BejovoListItem
+    adat = tipus.model_validate(b)
+    adat.cel_cimke = _cel_cimke(db, b)
+    adat.javaslat_indoklas = (b.javaslat or {}).get("indoklas")
+    adat.javaslat_erosseg = (b.javaslat or {}).get("erosseg")
+    adat.jovahagyo_nev = b.jovahagyo.full_name if b.jovahagyo else None
+    if reszletes:
+        adat.megerosites_kell = szamla_draft.megerosites_kell(b)
+        adat.ellenorzo_kod = szamla_draft.ellenorzo_kod(b)
+    return adat
+
+
+def _lekeres(db: Session, bejovo_id: int, zarolva: bool = False) -> BejovoSzamla:
+    q = select(BejovoSzamla).where(BejovoSzamla.id == bejovo_id)
+    if zarolva:
+        q = q.with_for_update()
+    b = db.execute(q).scalar_one_or_none()
+    if b is None:
+        raise HTTPException(status_code=404, detail="Ez a beérkező számla nem található.")
+    return b
+
+
+@router.get("", response_model=list[BejovoListItem])
+def lista(
+    allapot: str | None = None,
+    limit: int = 200,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
+):
+    q = select(BejovoSzamla).order_by(BejovoSzamla.id.desc()).limit(max(1, min(limit, 500)))
+    if allapot:
+        if allapot not in ALLAPOTOK:
+            raise HTTPException(status_code=400, detail=f"Ismeretlen állapot: {allapot}")
+        q = q.where(BejovoSzamla.allapot == allapot)
+    return [_kimenet(db, b) for b in db.scalars(q).all()]
+
+
+@router.get("/email-allapot")
+def email_allapot(
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
+):
+    """A levelezés-bekötés állapota + az utoljára látott levelek."""
+    utolso = db.scalars(select(BejovoEmail).order_by(BejovoEmail.id.desc()).limit(20)).all()
+    feladat = hatter_feladat.allapot(db, EMAIL_LEHUZAS_FELADAT)
+    from app.services.szamla_email_lehuzas import _legkorabbi_nap
+
+    return {
+        "cel_cim": settings.szamla_bejovo_cim,
+        "legkorabbi_nap": _legkorabbi_nap().isoformat(),
+        # Automatikus érkeztetés: gyakoriság + az utolsó futás eredménye - a
+        # felület ebből mutatja, mikor volt az utolsó sikeres ellenőrzés és
+        # volt-e hiba (a napló vége a hibaüzenetet is tartalmazza).
+        "auto_gyakorisag_perc": int(settings.szamla_auto_gyakorisag_perc or 0),
+        "utolso_futas": feladat.finished_at.isoformat() if feladat and feladat.finished_at else None,
+        "lehuzas_fut": bool(feladat and feladat.running),
+        "utolso_lehuzas_log": (feladat.log or "")[-2000:] if feladat else "",
+        "utolso_levelek": [
+            {
+                "felado": e.felado,
+                "targy": e.targy,
+                "beerkezes": e.beerkezes.isoformat() if e.beerkezes else None,
+                "allapot": e.allapot,
+                "szamla_db": e.letrehozott_szamla_db,
+            }
+            for e in utolso
+        ],
+    }
+
+
+@router.get("/celok/{tipus}")
+def cel_valasztek(
+    tipus: str,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
+):
+    """KERESHETŐ cél-választék a részletes ellenőrzőnek: a megfelelő TIG,
+    kiadás, előfizetés-időszak vagy KP-tétel EMBERI címkével (projekt, kód,
+    dátum, fél, összeg) - nem belső id-kkal kell dolgozni. A szűrést a
+    frontend keresője végzi (KeresosSelect), itt a friss, nyitott tételek
+    jönnek."""
+    from sqlalchemy import select as sel
+
+    lista: list[dict] = []
+    if tipus == "kulsos_tig":
+        for cert in db.scalars(
+            select(PerformanceCertificate)
+            .where(PerformanceCertificate.szamla_kifizetve.is_(False))
+            .order_by(PerformanceCertificate.id.desc())
+            .limit(400)
+        ):
+            fel = cert.employee.full_name if cert.employee else (cert.vallalkozas.nev if cert.vallalkozas else "?")
+            reszek = [fel]
+            if cert.project is not None:
+                if cert.project.nev:
+                    reszek.append(cert.project.nev)
+                if cert.project.forgatas_datuma:
+                    reszek.append(cert.project.forgatas_datuma.isoformat())
+                pc = db.get(ProjectCode, cert.project.project_code_id) if cert.project.project_code_id else None
+                if pc:
+                    reszek.append(pc.projektkod)
+            elif cert.project_code_id:
+                pc = db.get(ProjectCode, cert.project_code_id)
+                if pc:
+                    reszek.append(pc.projektkod)
+            if cert.netto_osszeg is not None:
+                reszek.append(f"{float(cert.netto_osszeg):,.0f} Ft".replace(",", " "))
+            if cert.invoices:
+                reszek.append(f"{len(cert.invoices)} számla már van")
+            lista.append({"id": cert.id, "cimke": " – ".join(reszek)})
+    elif tipus == "belsos_tig":
+        for cert in db.scalars(
+            select(InternalPerformanceCertificate)
+            .order_by(InternalPerformanceCertificate.ev.desc(), InternalPerformanceCertificate.honap.desc())
+            .limit(300)
+        ):
+            emp = db.get(Employee, cert.employee_id)
+            lista.append({"id": cert.id, "cimke": f"{emp.full_name if emp else '?'} – {cert.ev}.{cert.honap:02d}"})
+    elif tipus == "kiadas_csatolas":
+        for exp in db.scalars(select(Expense).order_by(Expense.id.desc()).limit(400)):
+            pc = db.get(ProjectCode, exp.project_code_id) if exp.project_code_id else None
+            reszek = [exp.megnevezes]
+            if exp.kiadas_leiras:
+                reszek.append(exp.kiadas_leiras[:60])
+            if pc:
+                reszek.append(pc.projektkod)
+            if exp.netto is not None:
+                reszek.append(f"{float(exp.netto):,.0f} Ft".replace(",", " "))
+            if exp.fizetes_datuma:
+                reszek.append(exp.fizetes_datuma.isoformat())
+            lista.append({"id": exp.id, "cimke": " – ".join(reszek)})
+    elif tipus == "erezsi":
+        for idoszak in db.scalars(
+            sel(KotelezettsegIdoszak).order_by(KotelezettsegIdoszak.esedekesseg.desc()).limit(400)
+        ):
+            lista.append(
+                {
+                    "id": idoszak.id,
+                    "cimke": f"{idoszak.kotelezettseg.nev}"
+                    + (f" ({idoszak.kotelezettseg.csomag})" if idoszak.kotelezettseg.csomag else "")
+                    + f" – {idoszak.esedekesseg}"
+                    + (" – összeg már beírva" if idoszak.osszeg is not None else ""),
+                }
+            )
+    elif tipus == "kp":
+        from app.models.finance import KpForgalom
+        from app.services.kassza import kp_ervenyes_sql
+
+        # A 2026.01.01 előtti KP forgalom nem létezik (lásd services/kassza.KP_KEZDET).
+        for kp in db.scalars(sel(KpForgalom).where(kp_ervenyes_sql()).order_by(KpForgalom.id.desc()).limit(300)):
+            lista.append(
+                {
+                    "id": kp.id,
+                    "cimke": f"{kp.forgalom or '?'} – {float(kp.osszeg or 0):,.0f} {kp.penznem}".replace(",", " ")
+                    + (f" – {kp.kiadas_datuma}" if kp.kiadas_datuma else ""),
+                }
+            )
+    else:
+        raise HTTPException(status_code=400, detail=f"Ehhez a cél-típushoz nincs választék: {tipus}")
+    return {"tipus": tipus, "lista": lista}
+
+
+@router.post("/{bejovo_id}/fajl", response_model=BejovoReszlet)
+async def fajl_potlas(
+    bejovo_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    """A LETÖLTÖTT SZÁMLA CSATOLÁSA egy már meglévő (jellemzően csak letöltő-
+    linkes levélből nyitott) piszkozathoz - UGYANAZT a tételt folytatja, nem
+    kell új asszisztens-beérkezést csinálni. A fájl után a feldolgozás
+    (kiolvasás + duplikáció + javaslat) lefut ezen a piszkozaton."""
+    b = _lekeres(db, bejovo_id, zarolva=True)
+    if b.allapot == ALLAPOT_JOVAHAGYVA:
+        raise HTTPException(status_code=409, detail="A már jóváhagyott tételhez nem cserélhető a fájl.")
+    adat = await file.read()
+    mime = (file.content_type or "application/octet-stream").split(";")[0].strip().lower()
+    from app.services.szamla_erkeztetes import ENGEDETT_MIME, XML_MIME
+
+    if mime not in ENGEDETT_MIME | XML_MIME:
+        raise HTTPException(status_code=400, detail=f"Nem támogatott fájltípus: {mime}.")
+    if not adat or len(adat) > szamla_erkeztetes.MAX_MERET:
+        raise HTTPException(status_code=400, detail="A fájl üres vagy túl nagy (max 20 MB).")
+    regi_kulcs = b.storage_key
+    b.fajl_nev = (file.filename or "szamla")[:255]
+    b.content_type = mime
+    b.meret_bajt = len(adat)
+    b.fajl_hash = szamla_erkeztetes._hash(adat)
+    db.flush()
+    import re as _re
+
+    kulcs = f"bejovo-szamla/{b.id}-{_re.sub(r'[^A-Za-z0-9._-]+', '_', b.fajl_nev)[:80]}"
+    b.url = document_storage.upload_bytes(adat, kulcs, mime)
+    b.storage_key = kulcs
+    if b.forras == szamla_draft.FORRAS_DRAFT:
+        # Gépi piszkozat: az adatai strukturáltan jöttek, a fájl a jóváhagyáshoz
+        # (TIG-hez csatoláshoz) kell - újrakiolvasás nem írja felül őket, csak
+        # a dokumentum-ellenőrzés fut újra (az ellenőrző kód a fájllal változik).
+        if b.allapot in szamla_draft.VALIDALHATO_ALLAPOTOK:
+            szamla_draft.validal(db, b, user=_user)
+    else:
+        szamla_erkeztetes.feldolgoz(db, b, adat=adat)
+    db.commit()
+    if regi_kulcs and regi_kulcs != kulcs:
+        try:
+            document_storage.delete_object(regi_kulcs)
+        except Exception:  # noqa: BLE001
+            pass
+    db.refresh(b)
+    return _kimenet(db, b, reszletes=True)
+
+
+@router.get("/{bejovo_id}", response_model=BejovoReszlet)
+def reszlet(
+    bejovo_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
+):
+    return _kimenet(db, _lekeres(db, bejovo_id), reszletes=True)
+
+
+class DraftValasz(BaseModel):
+    """A strukturált piszkozat eredménye: a piszkozat, és hogy új-e."""
+
+    szamla: BejovoReszlet
+    mar_letezett: bool
+
+
+@router.post("/draft", response_model=DraftValasz, status_code=201)
+def draft_letrehozas(
+    payload: SzamlaDraftIn,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(require_page_action(PAGE, "create", *_MINDEN_SZEREPKOR)),
+):
+    """STRUKTURÁLT SZÁMLA-PISZKOZAT (AI-kiolvasó, Lara vagy kézi beküldés).
+
+    A bemenet formai szabályait a séma érvényesíti (422 - lásd
+    schemas/szamla_draft.py), a törzsadattal való összevetést a szolgáltatás
+    (services/szamla_draft.py): partner adószám alapján, érvényes
+    alvállalkozói keretszerződés (vagy a projektre szóló eseti szerződés), és
+    kiküldött külsős TIG a projektkód + forgatási nap szerint. Ha a szerződés
+    vagy a TIG hiányzik, az állapot `hianyzo_dokumentumok`, és a `validacio`
+    előkészítési opciókat ad - ezeket a rendszer NEM futtatja le.
+
+    Pénzügyi rekord itt nem keletkezik; az elfogadás a jóváhagyás végpontján,
+    explicit megerősítéssel történik. Ugyanaz a beküldés kétszer: a meglévő
+    piszkozatot adja vissza (200-zal értelmezendő `mar_letezett=true`);
+    ugyanaz a számla eltérő adattal: 409."""
+    try:
+        b, mar_letezett = szamla_draft.letrehoz(db, payload, current_user)
+    except szamla_draft.DraftUtkozes as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail={"uzenet": str(exc), "meglevo_id": exc.meglevo_id}) from exc
+    except szamla_draft.DraftHiba as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    db.commit()
+    db.refresh(b)
+    return DraftValasz(szamla=_kimenet(db, b, reszletes=True), mar_letezett=mar_letezett)
+
+
+@router.post("/{bejovo_id}/draft/ujravalidalas", response_model=BejovoReszlet)
+def draft_ujravalidalas(
+    bejovo_id: int,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    """A dokumentum-ellenőrzés újrafuttatása (pl. miután elkészült a hiányzó
+    TIG vagy keretszerződés) - csak gépi piszkozaton, és jóváhagyás előtt."""
+    b = _lekeres(db, bejovo_id, zarolva=True)
+    if b.forras != szamla_draft.FORRAS_DRAFT:
+        raise HTTPException(status_code=400, detail="Ez nem strukturált piszkozat - használd az újrafeldolgozást.")
+    try:
+        szamla_draft.validal(db, b, user=current_user)
+    except szamla_draft.DraftHiba as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    db.commit()
+    db.refresh(b)
+    return _kimenet(db, b, reszletes=True)
+
+
+@router.get("/{bejovo_id}/audit")
+def audit_naplo(
+    bejovo_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "view", *_MINDEN_SZEREPKOR)),
+):
+    """Az automatikus műveletek és gépi adategyeztetések naplója ehhez a
+    számlához (létrehozás, ellenőrzések, jóváhagyási kísérletek)."""
+    _lekeres(db, bejovo_id)
+    return [
+        automatizalas_audit.sor_dict(s)
+        for s in automatizalas_audit.lista(db, eroforras_tipus="bejovo_szamla", eroforras_id=bejovo_id)
+    ]
+
+
+@router.post("/feltoltes", response_model=BejovoReszlet, status_code=201)
+async def feltoltes(
+    file: UploadFile = File(...),
+    utasitas: str = Form(""),
+    #: Az EGYSZERRE feltöltött, összetartozó fájlok (számla + Excel-részletező)
+    #: közös azonosítója - ugyanazt a párosítást adja, mint az egy levélben
+    #: érkezett mellékleteknél az üzenet-azonosító (lásd szamla_erkeztetes.
+    #: _reszletezo_feldolgozas): a bontás-javaslat a társ-számlára kerül.
+    csoport: str = Form(""),
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(require_page_action(PAGE, "create", *_MINDEN_SZEREPKOR)),
+):
+    """Számla feltöltése kézzel vagy az AI Assistantból - a KÖZÖS folyamaton:
+    a fájl eltárolódik, kiolvassuk, duplikációt vizsgálunk, besorolási
+    javaslattal MENTETT piszkozat készül. Szinkron fut, mert a hívó (a chat)
+    a válaszban már a kész ellenőrző-kártyát várja."""
+    adat = await file.read()
+    try:
+        bejovo = szamla_erkeztetes.letrehozas(
+            db,
+            forras="asszisztens",
+            adat=adat,
+            fajl_nev=file.filename,
+            content_type=file.content_type,
+            utasitas=utasitas,
+            letrehozo_id=current_user.id,
+            email_meta={"uzenet_id": csoport.strip()[:200]} if csoport.strip() else None,
+        )
+        szamla_erkeztetes.feldolgoz(db, bejovo, adat=adat)
+    except ErkeztetesHiba as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    db.commit()
+    db.refresh(bejovo)
+    return _kimenet(db, bejovo, reszletes=True)
+
+
+class MezoJavitasIn(BaseModel):
+    """A kinyert adatok kézi javítása és/vagy a cél átállítása. Csak a küldött
+    mezők változnak; a javított mező forrása "felhasznalo" lesz."""
+
+    szamlaszam: str | None = None
+    kibocsato_nev: str | None = None
+    kibocsato_adoszam: str | None = None
+    netto: float | None = None
+    afa_osszeg: float | None = None
+    brutto: float | None = None
+    penznem: str | None = None
+    kiallitas_datuma: date | None = None
+    teljesites_datuma: date | None = None
+    fizetesi_hatarido: date | None = None
+    dokumentum_tipus: str | None = None
+    #: Strukturált piszkozatnál: a hivatkozott projektkód és forgatási nap
+    #: javítása (utána az ellenőrzés automatikusan újrafut).
+    hivatkozott_projektkod: str | None = None
+    hivatkozott_forgatas_datuma: date | None = None
+    cel_tipus: str | None = None
+    cel_project_code_id: int | None = None
+    cel_expense_id: int | None = None
+    cel_certificate_id: int | None = None
+    cel_internal_certificate_id: int | None = None
+    cel_kotelezettseg_idoszak_id: int | None = None
+    cel_auto_id: int | None = None
+    cel_kp_forgalom_id: int | None = None
+    cel_employee_id: int | None = None
+    felhasznaloi_utasitas: str | None = None
+    #: BONTÁS-PISZKOZAT mentése (több projekt egy számlán): a sorok listája -
+    #: hiányosan is menthető, a teljesség csak a jóváhagyásnál követelmény.
+    bontas: list[dict] | None = None
+
+
+@router.patch("/{bejovo_id}", response_model=BejovoReszlet)
+def javitas(
+    bejovo_id: int,
+    payload: MezoJavitasIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    b = _lekeres(db, bejovo_id)
+    if b.allapot == ALLAPOT_JOVAHAGYVA:
+        raise HTTPException(status_code=409, detail="A már jóváhagyott tétel nem szerkeszthető.")
+    valtozasok = payload.model_dump(exclude_unset=True)
+    if "cel_tipus" in valtozasok and valtozasok["cel_tipus"] is not None and valtozasok["cel_tipus"] not in CEL_TIPUSOK:
+        raise HTTPException(status_code=400, detail=f"Ismeretlen cél-típus: {valtozasok['cel_tipus']}")
+    # CÉLTÍPUS-VÁLTÁSKOR a régi, az új típushoz nem tartozó rekord-kapcsolat
+    # törlődik a piszkozatból (a felhasználó kérése) - különben egy korábbi
+    # TIG-hivatkozás némán ott maradna egy "új kiadás" cél mögött.
+    if "cel_tipus" in valtozasok and valtozasok["cel_tipus"] != b.cel_tipus:
+        TIPUS_MEZOI = {
+            "kiadas_uj": {"cel_project_code_id", "cel_employee_id"},
+            "mukodesi": {"cel_employee_id"},
+            "auto": {"cel_auto_id", "cel_employee_id", "cel_project_code_id"},
+            "kiadas_csatolas": {"cel_expense_id"},
+            "kulsos_tig": {"cel_certificate_id"},
+            "belsos_tig": {"cel_internal_certificate_id"},
+            "erezsi": {"cel_kotelezettseg_idoszak_id"},
+            "kp": {"cel_kp_forgalom_id"},
+        }
+        megtartando = TIPUS_MEZOI.get(valtozasok["cel_tipus"] or "", set())
+        for mezo in (
+            "cel_project_code_id",
+            "cel_expense_id",
+            "cel_certificate_id",
+            "cel_internal_certificate_id",
+            "cel_kotelezettseg_idoszak_id",
+            "cel_auto_id",
+            "cel_kp_forgalom_id",
+            "cel_employee_id",
+        ):
+            if mezo not in megtartando and mezo not in valtozasok:
+                setattr(b, mezo, None)
+    utasitas_valtozott = "felhasznaloi_utasitas" in valtozasok
+    for mezo, ertek in valtozasok.items():
+        setattr(b, mezo, ertek)
+        # A kézzel javított mező forrása mostantól a felhasználó - az
+        # ellenőrző ebből mutatja, mi honnan származik.
+        if b.kinyert and mezo not in ("felhasznaloi_utasitas", "bontas") and not mezo.startswith("cel_"):
+            b.kinyert = {
+                **b.kinyert,
+                "mezo_forrasok": {**(b.kinyert.get("mezo_forrasok") or {}), mezo: "felhasznalo"},
+            }
+    if "hivatkozott_projektkod" in valtozasok and b.hivatkozott_projektkod:
+        b.hivatkozott_projektkod = b.hivatkozott_projektkod.strip().upper()[:50] or None
+    adat_valtozott = any(not m.startswith("cel_") and m != "bontas" for m in valtozasok)
+    if b.forras == szamla_draft.FORRAS_DRAFT and adat_valtozott and b.allapot in szamla_draft.VALIDALHATO_ALLAPOTOK:
+        # Gépi piszkozatnál a besorolás a dokumentum-ellenőrzésből jön: a
+        # javított adatokon az fut újra (nem a fájl-alapú javaslattevő), így
+        # a hiányzó szerződés/TIG nem tűnhet el egy mezőjavítással.
+        szamla_draft.validal(db, b, user=_user)
+    elif utasitas_valtozott:
+        # Az utasítás a besorolás első számú forrása - újrajavaslunk (a már
+        # kinyert adatokon, új kiolvasás nélkül).
+        szamla_erkeztetes.javasol(db, b)
+    db.commit()
+    db.refresh(b)
+    return _kimenet(db, b, reszletes=True)
+
+
+class JovahagyasIn(BaseModel):
+    cel_tipus: str | None = None
+    cel_project_code_id: int | None = None
+    cel_expense_id: int | None = None
+    cel_certificate_id: int | None = None
+    cel_internal_certificate_id: int | None = None
+    cel_kotelezettseg_idoszak_id: int | None = None
+    cel_auto_id: int | None = None
+    cel_kp_forgalom_id: int | None = None
+    cel_employee_id: int | None = None
+    megnevezes: str | None = None
+    kiadas_leiras: str | None = None
+    netto: float | None = None
+    tipus: str | None = None
+    kifizetes_modja: str | None = None
+    #: Devizás számlánál KÖTELEZŐ - önkényes árfolyamot nem használunk.
+    arfolyam: float | None = None
+    #: Több projekt közti felosztás: [{"project_code_id": ..., "netto": ...}] -
+    #: az összegeknek pontosan ki kell adniuk a számla nettóját.
+    felosztas: list[dict] | None = None
+    #: VEGYES CÉLÚ BONTÁS (cel_tipus="bontas"): soronként {"cel_tipus":
+    #: "kiadas_uj"|"mukodesi"|"kulsos_tig"|"kiadas_csatolas", "project_code_id"?,
+    #: "cel_id"?, "netto", "megjegyzes"?} - ha nincs küldve, a mentett
+    #: piszkozat (BejovoSzamla.bontas) érvényes.
+    bontas: list[dict] | None = None
+    #: EXPLICIT MEGERŐSÍTÉS - a gépi (strukturált piszkozatból jött) számlák
+    #: jóváhagyásához kötelező, lásd services/szamla_draft.megerosites_ellenorzes.
+    megerosites: Megerosites | None = None
+
+
+@router.post("/{bejovo_id}/jovahagyas", response_model=BejovoReszlet)
+def jovahagyas(
+    bejovo_id: int,
+    payload: JovahagyasIn,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(require_page_action(PAGE, "create", *_MINDEN_SZEREPKOR)),
+):
+    """VÉGLEGES RÖGZÍTÉS - sorzárral és ismételt végrehajtás elleni védelemmel:
+    két párhuzamos jóváhagyás (vagy dupla kattintás) közül csak az első rögzít,
+    a második a már megtörtént eredményt kapja. Az éles összesítők eddig a
+    pillanatig változatlanok voltak."""
+    b = _lekeres(db, bejovo_id, zarolva=True)
+    dontes = payload.model_dump(exclude_unset=True, exclude={"megerosites"})
+    megerosites = payload.megerosites.model_dump() if payload.megerosites else None
+    mar_jovahagyva = b.allapot == ALLAPOT_JOVAHAGYVA
+    elotte = {"allapot": b.allapot, "cel_tipus": b.cel_tipus, "javaslat": (b.javaslat or {}).get("javasolt_cel")}
+    try:
+        if not mar_jovahagyva:
+            szamla_draft.megerosites_ellenorzes(b, megerosites)
+        naplo = szamla_erkeztetes.jovahagy(db, b, current_user, dontes)
+    except szamla_draft.MegerositesHiba as exc:
+        db.rollback()
+        # Az elutasított kísérlet is nyomot hagy (külön tranzakcióban, mert
+        # a jóváhagyásét visszagörgettük).
+        automatizalas_audit.naplo(
+            db,
+            muvelet="szamla.jovahagyas",
+            eroforras_tipus="bejovo_szamla",
+            eroforras_id=bejovo_id,
+            szereplo="felhasznalo",
+            employee_id=current_user.id,
+            eredmeny="elutasitva",
+            reszletek={"ok": str(exc), "megerosites_erkezett": megerosites is not None},
+        )
+        db.commit()
+        raise HTTPException(status_code=exc.statusz, detail=str(exc)) from exc
+    except ErkeztetesHiba as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not mar_jovahagyva:
+        # A gépi javaslat és az emberi döntés összevetése - ebből látszik
+        # utólag, hol tért el a jóváhagyó a javasolt adategyeztetéstől.
+        automatizalas_audit.naplo(
+            db,
+            muvelet="szamla.jovahagyas",
+            eroforras_tipus="bejovo_szamla",
+            eroforras_id=b.id,
+            szereplo="felhasznalo",
+            employee_id=current_user.id,
+            reszletek={
+                "forras": b.forras,
+                "allapot_elotte": elotte["allapot"],
+                "javasolt_cel": elotte["javaslat"],
+                "javasolt_cel_tipus": elotte["cel_tipus"],
+                "dontes_cel_tipus": naplo.get("cel_tipus"),
+                "dontes": {k: v for k, v in dontes.items() if k.startswith("cel_")},
+                "explicit_megerosites": megerosites is not None,
+                "letrejott": naplo.get("letrejott"),
+                "csatolt": naplo.get("csatolt"),
+            },
+        )
+    db.commit()
+    db.refresh(b)
+    return _kimenet(db, b, reszletes=True)
+
+
+class AllapotIn(BaseModel):
+    megjegyzes: str | None = None
+
+
+@router.post("/{bejovo_id}/duplikatum", response_model=BejovoReszlet)
+def duplikatumnak_jelol(
+    bejovo_id: int,
+    payload: AllapotIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    b = _lekeres(db, bejovo_id, zarolva=True)
+    if b.allapot == ALLAPOT_JOVAHAGYVA:
+        raise HTTPException(status_code=409, detail="Jóváhagyott tétel már nem jelölhető duplikátumnak.")
+    b.allapot = ALLAPOT_DUPLIKATUM
+    b.duplikatum_megjegyzes = payload.megjegyzes or b.duplikatum_megjegyzes
+    db.commit()
+    db.refresh(b)
+    return _kimenet(db, b, reszletes=True)
+
+
+@router.post("/{bejovo_id}/nem-szamla", response_model=BejovoReszlet)
+def nem_szamlanak_jelol(
+    bejovo_id: int,
+    payload: AllapotIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    b = _lekeres(db, bejovo_id, zarolva=True)
+    if b.allapot == ALLAPOT_JOVAHAGYVA:
+        raise HTTPException(status_code=409, detail="Jóváhagyott tétel már nem utasítható el.")
+    b.allapot = ALLAPOT_NEM_SZAMLA
+    b.duplikatum_megjegyzes = payload.megjegyzes or b.duplikatum_megjegyzes
+    db.commit()
+    db.refresh(b)
+    return _kimenet(db, b, reszletes=True)
+
+
+class UjrafeldolgozasIn(BaseModel):
+    #: "teljes": új kiolvasás + javaslat (hibás/elakadt tételhez);
+    #: "javaslat": CSAK a hely újrakeresése a már kinyert adatokon - gyors,
+    #: nem hív AI-kiolvasást (a felhasználó kérése: a betöltött számláknál
+    #: újra meg lehessen próbálni megtalálni a helyét, pl. miután felvett
+    #: egy hiányzó TIG-et/kiadást/projektkódot).
+    mod: str = "teljes"
+
+
+@router.post("/{bejovo_id}/ujrafeldolgozas", response_model=BejovoReszlet)
+def ujrafeldolgozas(
+    bejovo_id: int,
+    payload: UjrafeldolgozasIn | None = None,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    """Újrafeldolgozás vagy hely-újrakeresés - a jóváhagyott tételhez nem nyúl."""
+    b = _lekeres(db, bejovo_id, zarolva=True)
+    if b.allapot == ALLAPOT_JOVAHAGYVA:
+        raise HTTPException(status_code=409, detail="Jóváhagyott tétel nem dolgozható fel újra.")
+    b.hiba_uzenet = None
+    mod = (payload.mod if payload else "teljes") or "teljes"
+    # A korábbi cél-kijelölés tiszta lappal indul - a friss adatok (új TIG,
+    # új kiadás, új projektkód) így ténylegesen érvényesülnek. A felhasználói
+    # utasítás megmarad, az továbbra is az első számú forrás.
+    for mezo in (
+        "cel_tipus",
+        "cel_project_code_id",
+        "cel_project_id",
+        "cel_expense_id",
+        "cel_certificate_id",
+        "cel_internal_certificate_id",
+        "cel_kotelezettseg_idoszak_id",
+        "cel_auto_id",
+        "cel_kp_forgalom_id",
+        "cel_employee_id",
+    ):
+        setattr(b, mezo, None)
+    if b.forras == szamla_draft.FORRAS_DRAFT:
+        # Gépi piszkozat: nincs fájl, amit újra ki lehetne olvasni - a
+        # dokumentum-ellenőrzés fut újra a friss törzsadaton.
+        if b.allapot not in szamla_draft.VALIDALHATO_ALLAPOTOK:
+            b.allapot = ALLAPOT_PONTOSITAS
+        szamla_draft.validal(db, b, user=_user)
+    elif mod == "javaslat" and (b.kinyert or {}).get("mezok"):
+        # Gyors út: a már kinyert adatokon csak a duplikáció-vizsgálat és a
+        # párosítás fut újra (AI-kiolvasás nélkül).
+        duplikatum = szamla_erkeztetes._duplikacio(db, b)
+        if duplikatum is not None:
+            b.allapot = ALLAPOT_DUPLIKATUM
+            b.duplikatum_bejovo_id = duplikatum.id
+            b.duplikatum_megjegyzes = (
+                f"Egyezik a #{duplikatum.id} beérkezett számlával "
+                f"({duplikatum.kibocsato_nev or '?'} / {duplikatum.szamlaszam or 'azonos fájl'})."
+            )
+        else:
+            szamla_erkeztetes.javasol(db, b)
+    else:
+        szamla_erkeztetes.feldolgoz(db, b)
+    db.commit()
+    db.refresh(b)
+    return _kimenet(db, b, reszletes=True)
+
+
+@router.delete("/{bejovo_id}", response_model=None)
+def torles(
+    bejovo_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "delete", *_MINDEN_SZEREPKOR)),
+):
+    """Egy beérkező számla-piszkozat VÉGLEGES törlése - bármelyik állapotban
+    (a felhasználó kérése). A tárolt fájl is törlődik az R2-ről.
+
+    A jóváhagyáskor MÁR LÉTREJÖTT rekordokat (kiadás, TIG-számla sor,
+    csatolmány) a törlés NEM bántja: azok saját másolatban őrzik a fájlt, és
+    a maguk felületén kezelhetők - itt csak az érkeztető-piszkozat tűnik el.
+    Az eredeti e-mail a postafiókban marad; a bejovo_emailek napló is marad,
+    tehát a törölt levél egy újabb lehúzással nem jön vissza magától."""
+    b = _lekeres(db, bejovo_id, zarolva=True)
+    kulcs = b.storage_key
+    try:
+        # A rá mutató piszkozat-hivatkozásokat (formátum-változat, duplikátum-
+        # jelölés) kifejezetten leoldjuk - így a törlés akkor is lefut, ha az
+        # adatbázis-kényszer valamiért nem SET NULL-lal jött létre.
+        db.execute(
+            sa_update(BejovoSzamla)
+            .where(BejovoSzamla.valtozat_szamla_id == b.id)
+            .values(valtozat_szamla_id=None)
+        )
+        db.execute(
+            sa_update(BejovoSzamla)
+            .where(BejovoSzamla.duplikatum_bejovo_id == b.id)
+            .values(duplikatum_bejovo_id=None)
+        )
+        db.delete(b)
+        db.commit()
+    except Exception as exc:  # noqa: BLE001 - a hívó lássa az okot, ne néma 500-at
+        db.rollback()
+        import logging
+
+        logging.getLogger(__name__).exception("Beérkező számla törlési hiba (#%s)", bejovo_id)
+        raise HTTPException(
+            status_code=500,
+            detail=f"A törlés nem sikerült: {type(exc).__name__}: {exc}",
+        ) from exc
+    if kulcs:
+        try:
+            document_storage.delete_object(kulcs)
+        except Exception:  # noqa: BLE001 - az árva objektum nem éri meg az 500-at
+            pass
+    return None
+
+
+@router.post("/osszes-torles")
+def osszes_torles(
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(require_page_action(PAGE, "delete", *_MINDEN_SZEREPKOR)),
+):
+    """Az ÖSSZES beérkező számla-piszkozat törlése egyben - CSAK ADMIN.
+
+    A tiszta újraindításnál egyszerűbb, garantáltan lefutó művelet: kizárólag
+    az érkeztető-piszkozatokat üríti ki (bármelyik állapotban), a jóváhagyáskor
+    MÁR LÉTREJÖTT rekordokhoz (kiadás, TIG-számla sor, csatolmány) nem nyúl.
+    A tárolt fájlok háttérben törlődnek az R2-ről. A bejovo_emailek napló
+    megmarad, ezért a már egyszer átvett levelek egy újabb ellenőrzéskor nem
+    jönnek vissza."""
+    from app.models.employee import van_szerepkore
+
+    if not van_szerepkore(current_user, SystemRole.ADMIN):
+        raise HTTPException(status_code=403, detail="Az összes tétel törlését csak admin futtathatja.")
+    try:
+        sorok = db.scalars(select(BejovoSzamla)).all()
+        kulcsok = [s.storage_key for s in sorok if s.storage_key]
+        darab = len(sorok)
+        # A self-hivatkozásokat előbb leoldjuk, majd egyetlen SQL-törlés - így
+        # nincs olyan sorrend vagy kényszer, amin a művelet elakadhatna.
+        db.execute(sa_update(BejovoSzamla).values(valtozat_szamla_id=None, duplikatum_bejovo_id=None))
+        db.execute(sa_delete(BejovoSzamla))
+        db.commit()
+    except Exception as exc:  # noqa: BLE001 - a hívó lássa az okot, ne néma 500-at
+        db.rollback()
+        import logging
+
+        logging.getLogger(__name__).exception("Beérkező számlák tömeges törlési hibája")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Az összes tétel törlése nem futott le, semmi nem változott: {type(exc).__name__}: {exc}",
+        ) from exc
+    if kulcsok:
+        import threading
+
+        def _r2_takaritas(lista: list[str]) -> None:
+            for k in lista:
+                try:
+                    document_storage.delete_object(k)
+                except Exception:  # noqa: BLE001 - az árva objektum nem hiba
+                    pass
+
+        threading.Thread(target=_r2_takaritas, args=(list(kulcsok),), daemon=True).start()
+    return {"torolt": darab}
+
+
+class ResetIn(BaseModel):
+    #: Kifejezett megerősítés - e nélkül a hívás nem fut le.
+    megerosites: str
+
+
+@router.post("/reset")
+def tiszta_ujrainditas(
+    payload: ResetIn,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(require_page_action(PAGE, "delete", *_MINDEN_SZEREPKOR)),
+):
+    """TISZTA ÚJRAINDÍTÁS: az eddigi érkeztetési beérkezések kitakarítása
+    (lásd services/szamla_reset.py) - CSAK ADMIN, kifejezett megerősítéssel.
+
+    Mentés + tételes visszaállítási jegyzék készül; a jóváhagyott tételek
+    mellékhatásai bizonyítható eredet alapján vonódnak vissza (a nem
+    bizonyítható rendezendő kivételként jelölődik); a kizárási napló megmarad,
+    így a kitakarított levelek nem jönnek vissza a következő lehúzáskor. Az
+    eredeti postafiókhoz nem nyúlunk."""
+    from app.models.employee import SystemRole, van_szerepkore
+    from app.services.hu_szoveg import ekezet_nelkul
+
+    if not van_szerepkore(current_user, SystemRole.ADMIN):
+        raise HTTPException(status_code=403, detail="A tiszta újraindítást csak admin futtathatja.")
+    # Ékezettel és kisbetűvel is elfogadjuk ("Tiszta indulás") - a megerősítés
+    # a szándékról szól, nem gépelési vizsgáról.
+    if ekezet_nelkul(payload.megerosites.strip()).upper() != "TISZTA INDULAS":
+        raise HTTPException(
+            status_code=400,
+            detail='A megerősítéshez írd be: "TISZTA INDULAS".',
+        )
+    from app.services import szamla_reset
+
+    try:
+        return szamla_reset.teljes_reset(db, current_user)
+    except Exception as exc:  # noqa: BLE001 - a hívó lássa az okot, ne néma 500-at
+        db.rollback()
+        import logging
+
+        logging.getLogger(__name__).exception("Tiszta újraindítás hiba")
+        raise HTTPException(
+            status_code=500,
+            detail=f"A tiszta újraindítás nem futott le, semmi nem változott: {type(exc).__name__}: {exc}",
+        ) from exc
+
+
+class LehuzasIn(BaseModel):
+    #: Régi levelek visszamenőleges feldolgozásához - választható
+    #: DÁTUMTARTOMÁNY (a napi automatikus ellenőrzésnek nem kell).
+    kezdo_datum: date | None = None
+    veg_datum: date | None = None
+    limit: int = 50
+    #: Előnézet: semmit nem hoz létre, csak megmutatja, mi történne.
+    elonezet: bool = False
+
+
+@router.post("/email-lehuzas")
+def email_lehuzas(
+    payload: LehuzasIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PAGE, "edit", *_MINDEN_SZEREPKOR)),
+):
+    """A célcímre érkezett levelek lehúzása MOST (kézi indítás). Idempotens:
+    a már látott üzenetek kimaradnak (lásd services/szamla_email_lehuzas.py)."""
+    try:
+        return szamla_email_lehuzas_futtatasa(db, payload)
+    except RuntimeError as exc:
+        # Hiányzó Gmail-hitelesítés: beszédes hibával, nem 500-zal.
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+def szamla_email_lehuzas_futtatasa(db, payload: LehuzasIn) -> dict:
+    from app.services import szamla_email_lehuzas as lehuzo
+
+    return lehuzo.lehuzas(
+        db,
+        kezdo_datum=payload.kezdo_datum,
+        veg_datum=payload.veg_datum,
+        limit=max(1, min(payload.limit, 200)),
+        csak_elonezet=payload.elonezet,
+    )

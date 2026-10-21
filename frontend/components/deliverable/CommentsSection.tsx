@@ -1,0 +1,439 @@
+"use client";
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Paperclip, X } from "lucide-react";
+import { useConfirm } from "@/components/ConfirmProvider";
+import { authFetch } from "@/lib/authFetch";
+import { useLiveTopic } from "@/lib/live";
+import type { DeliverableComment, DocumentAttachment } from "@/lib/api";
+import { Markdown } from "@/components/Markdown";
+import { ProfilAvatar } from "@/components/ProfilAvatar";
+
+const MENTION_PATTERN = /@[^\s@]*$/;
+
+function formatTimestamp(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleString("hu-HU", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+/** Egy hozzászólás szövege FORMÁZOTTAN (a felhasználó kérése): markdown -
+ * félkövér, felsorolás, címsor, kód - plusz a "@Név" kiemelés és a
+ * kattintható linkek, ugyanúgy, mint eddig (lásd components/Markdown.tsx).
+ * A kézzel és az AI Assistanttel írt komment is ugyanígy jelenik meg. */
+function BodyWithMentions({ body }: { body: string }) {
+  return (
+    <div className="text-[13px] text-text-primary">
+      <Markdown szoveg={body} mentions />
+    </div>
+  );
+}
+
+/** Chat-szerű hozzászólás-lista egy Utómunka oldal alján - a résztvevők
+ * névvel beszélgetnek, és "@" beírásával egymást is meg tudják taggelni
+ * (a csatolt Notion Comments minta alapján, egyszerűsített - lapos lista,
+ * nem szálakba rendezett válaszok). */
+export function CommentsSection({
+  deliverableId,
+  initialComments,
+  mentionableEmployees,
+  canUpload,
+  currentEmployeeId = null,
+  profilkepek = {},
+}: {
+  deliverableId: number;
+  initialComments: DeliverableComment[];
+  mentionableEmployees: { id: number; full_name: string }[];
+  /** Csatolhat-e fájlt egy hozzászóláshoz - a Fájlok/csatolmányok végpont
+   * ugyanazt a jogosultságot kéri, mint az Utómunka oldal szerkesztése (lásd
+   * backend services/attachments.ENTITAS_OLDALAK "deliverableComment"). */
+  canUpload: boolean;
+  /** A bejelentkezett munkatárs id-je - a SAJÁT hozzászólás küldés után is
+   * szerkeszthető (a felhasználó kérése), ehhez kell tudni, melyik az övé. */
+  currentEmployeeId?: number | null;
+  /** Munkatárs-id -> profilkép data-URL (a felhasználó kérése: mindenki
+   * profilképe látszódjon a saját hozzászólásánál). Kép híján monogram. */
+  profilkepek?: Record<number, string>;
+}) {
+  // A FÉLBEHAGYOTT hozzászólás megőrzése (a felhasználó kérése): a piszkozat
+  // a böngészőben marad, oldalváltás után visszatérve folytatható és
+  // elküldhető. Anyagonként külön kulcs - két anyag piszkozata nem keveredik.
+  const piszkozatKulcs = `hype_utomunka_komment_piszkozat_${deliverableId}`;
+  const [comments, setComments] = useState(initialComments);
+  const [body, setBody] = useState("");
+  // A piszkozat EFFEKTUSBAN töltődik be, nem a useState kezdőértékeként: a
+  // szerver-render üres mezőt ad (ott nincs localStorage), és egy eltérő
+  // kliens-kezdőérték hidratálási eltérést okozna.
+  useEffect(() => {
+    try {
+      const mentett = localStorage.getItem(piszkozatKulcs);
+      if (mentett) setBody(mentett);
+    } catch {
+      // localStorage nem elérhető (privát böngészés stb.) - piszkozat nélkül indulunk.
+    }
+    // csak első betöltéskor - a kulcs a komponens élete alatt nem változik
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const [busy, setBusy] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [uploadingCommentId, setUploadingCommentId] = useState<number | null>(null);
+  // A SAJÁT hozzászólás szerkesztése: melyiket írja át épp, és mire.
+  const [szerkesztes, setSzerkesztes] = useState<{ id: number; ertek: string } | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const confirm = useConfirm();
+
+  // Ha valaki MÁS ír ide, az oldal újratöltése nélkül is megjelenjen: a
+  // háttérfigyelő szól, ha ennek az anyagnak a hozzászólásai változtak, és
+  // csak akkor kérjük le újra a listát. A félig megírt saját szöveg (body)
+  // érintetlen marad, mert az külön állapot.
+  useLiveTopic(`comments:${deliverableId}`, () => {
+    authFetch(`/api/v1/deliverables/${deliverableId}/comments`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((fresh: DeliverableComment[] | null) => fresh && setComments(fresh))
+      .catch(() => {});
+  });
+
+  const mentionMatches = useMemo(() => {
+    if (mentionQuery === null) return [];
+    const q = mentionQuery.toLowerCase();
+    return mentionableEmployees.filter((e) => e.full_name.toLowerCase().includes(q)).slice(0, 6);
+  }, [mentionQuery, mentionableEmployees]);
+
+  function handleChange(value: string) {
+    setBody(value);
+    // A piszkozat MINDEN leütésnél mentődik - így akkor is megmarad, ha a
+    // felhasználó egy linkre kattintva elnavigál, vagy bezárja a lapot.
+    try {
+      if (value) localStorage.setItem(piszkozatKulcs, value);
+      else localStorage.removeItem(piszkozatKulcs);
+    } catch {
+      // localStorage nélkül a piszkozat egyszerűen nem marad meg - nem hiba.
+    }
+    const cursor = textareaRef.current?.selectionStart ?? value.length;
+    const uptoCursor = value.slice(0, cursor);
+    const match = uptoCursor.match(MENTION_PATTERN);
+    setMentionQuery(match ? match[0].slice(1) : null);
+  }
+
+  function insertMention(name: string) {
+    const cursor = textareaRef.current?.selectionStart ?? body.length;
+    const uptoCursor = body.slice(0, cursor);
+    const replaced = uptoCursor.replace(MENTION_PATTERN, `@${name} `);
+    const next = replaced + body.slice(cursor);
+    setBody(next);
+    try {
+      localStorage.setItem(piszkozatKulcs, next);
+    } catch {
+      // ua., mint handleChange-ben.
+    }
+    setMentionQuery(null);
+    textareaRef.current?.focus();
+  }
+
+  /** Fájlokat tölt fel EGY hozzászóláshoz, egyenként (mint DokumentumFeltoltes-
+   * nél): egy hibás fájl csak magát bukja, a többi felmegy. A sikeresen
+   * felkerült csatolmányokat adja vissza, hogy a hívó a helyi állapotba
+   * tehesse - nincs router.refresh(), mert ez a komponens saját state-ben
+   * tartja a hozzászólásokat, azt egy szerver-oldali frissítés nem érné el. */
+  async function toltsFel(commentId: number, files: File[]): Promise<DocumentAttachment[]> {
+    const feltoltottek: DocumentAttachment[] = [];
+    const hibak: string[] = [];
+    for (const file of files) {
+      try {
+        const fd = new FormData();
+        fd.append("file", file);
+        const res = await authFetch(`/api/v1/csatolmanyok/deliverableComment/${commentId}?kategoria=egyeb`, {
+          method: "POST",
+          body: fd,
+        });
+        if (!res.ok) {
+          const detail = await res.json().catch(() => null);
+          hibak.push(`${file.name}: ${detail?.detail ?? res.status}`);
+        } else {
+          feltoltottek.push(await res.json());
+        }
+      } catch (err) {
+        hibak.push(`${file.name}: ${err}`);
+      }
+    }
+    if (hibak.length > 0) alert(`Sikertelen feltöltés:\n${hibak.join("\n")}`);
+    return feltoltottek;
+  }
+
+  async function csatolmanyFeltoltese(commentId: number, fileList: FileList | null) {
+    if (!fileList || fileList.length === 0) return;
+    setUploadingCommentId(commentId);
+    try {
+      const csatolt = await toltsFel(commentId, Array.from(fileList));
+      if (csatolt.length > 0) {
+        setComments((prev) =>
+          prev.map((c) => (c.id === commentId ? { ...c, attachments: [...c.attachments, ...csatolt] } : c)),
+        );
+      }
+    } finally {
+      setUploadingCommentId(null);
+    }
+  }
+
+  async function csatolmanyTorlese(commentId: number, attachment: DocumentAttachment) {
+    if (!(await confirm(`Törlöd a(z) "${attachment.filename}" fájlt?`))) return;
+    try {
+      const res = await authFetch(`/api/v1/csatolmanyok/${attachment.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        alert(`Sikertelen törlés: ${detail?.detail ?? res.status}`);
+        return;
+      }
+      setComments((prev) =>
+        prev.map((c) =>
+          c.id === commentId ? { ...c, attachments: c.attachments.filter((a) => a.id !== attachment.id) } : c,
+        ),
+      );
+    } catch (err) {
+      alert(`Sikertelen törlés (hálózati hiba): ${err}`);
+    }
+  }
+
+  /** A saját hozzászólás átírásának mentése (a felhasználó kérése: küldés
+   * után is szerkeszthető - mindenki csak a sajátját, a backend is ezt
+   * ellenőrzi). */
+  async function szerkesztesMentese() {
+    if (!szerkesztes || !szerkesztes.ertek.trim()) return;
+    setBusy(true);
+    try {
+      const res = await authFetch(`/api/v1/deliverables/${deliverableId}/comments/${szerkesztes.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ body: szerkesztes.ertek.trim() }),
+      });
+      const adat = await res.json().catch(() => null);
+      if (!res.ok) {
+        alert(`Sikertelen mentés: ${adat?.detail ?? res.status}`);
+        return;
+      }
+      setComments((prev) =>
+        prev.map((c) => (c.id === szerkesztes.id ? { ...c, body: adat.body, updated_at: adat.updated_at } : c)),
+      );
+      setSzerkesztes(null);
+    } catch (err) {
+      alert(`Sikertelen mentés (hálózati hiba): ${err}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function send() {
+    // Csak fájllal (szöveg nélkül) is küldhető: a hozzászólásnak szöveg
+    // kell, ilyenkor a csatolt fájlok neve lesz az.
+    const trimmed = body.trim() || (pendingFiles.length > 0 ? `Fájl csatolva: ${pendingFiles.map((f) => f.name).join(", ")}` : "");
+    if (!trimmed) return;
+    setBusy(true);
+    try {
+      const res = await authFetch(`/api/v1/deliverables/${deliverableId}/comments`, {
+        method: "POST",
+        body: JSON.stringify({ body: trimmed }),
+      });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        alert(`Sikertelen: ${detail?.detail ?? res.status}`);
+        return;
+      }
+      let created: DeliverableComment = await res.json();
+      if (pendingFiles.length > 0) {
+        const csatolt = await toltsFel(created.id, pendingFiles);
+        created = { ...created, attachments: csatolt };
+      }
+      setComments((prev) => [...prev, created]);
+      setBody("");
+      setPendingFiles([]);
+      // Elment a hozzászólás - a piszkozatra nincs többé szükség.
+      try {
+        localStorage.removeItem(piszkozatKulcs);
+      } catch {
+        // ua.
+      }
+    } catch (err) {
+      alert(`Sikertelen (hálózati hiba): ${err}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div>
+      <div className="mb-4 space-y-3">
+        {comments.length === 0 && <p className="text-[13px] text-text-muted">Még nincs hozzászólás.</p>}
+        {comments.map((c) => (
+          <div key={c.id} className="rounded-[var(--radius)] bg-surface-1 p-3">
+            <div className="mb-1 flex items-center gap-2">
+              {/* A szerző profilképe (a felhasználó kérése) - kép híján monogram. */}
+              <ProfilAvatar nev={c.employee_name} kep={profilkepek[c.employee_id] ?? null} meret={22} />
+              <span className="text-[13px] font-medium text-text-primary">{c.employee_name}</span>
+              <span className="text-[11px] text-text-muted">{formatTimestamp(c.created_at)}</span>
+              {/* Az átírt hozzászólás jelölve van - a többiek lássák, hogy nem
+                  az eredeti szöveget olvassák. Pár másodperces eltérés még nem
+                  szerkesztés (a mentés két időbélyege sosem pont ugyanaz). */}
+              {c.updated_at && new Date(c.updated_at).getTime() - new Date(c.created_at).getTime() > 5000 && (
+                <span className="text-[11px] text-text-muted">(szerkesztve)</span>
+              )}
+              {/* A SAJÁT hozzászólás küldés után is szerkeszthető (a
+                  felhasználó kérése) - másét senki nem írhatja át. */}
+              {currentEmployeeId !== null && c.employee_id === currentEmployeeId && szerkesztes?.id !== c.id && (
+                <button
+                  type="button"
+                  onClick={() => setSzerkesztes({ id: c.id, ertek: c.body })}
+                  className="ml-auto text-[11.5px] text-text-muted hover:text-text-secondary"
+                >
+                  Szerkesztés
+                </button>
+              )}
+            </div>
+            {szerkesztes?.id === c.id ? (
+              <div>
+                <textarea
+                  autoFocus
+                  rows={Math.min(Math.max(szerkesztes.ertek.split("\n").length + 1, 3), 16)}
+                  value={szerkesztes.ertek}
+                  onChange={(e) => setSzerkesztes({ id: c.id, ertek: e.target.value })}
+                  className="w-full rounded-[var(--radius)] border border-border bg-surface-2 px-2.5 py-1.5 text-[13px] text-text-primary focus:outline-none"
+                />
+                <div className="mt-1.5 flex gap-2">
+                  <button
+                    type="button"
+                    disabled={busy || !szerkesztes.ertek.trim()}
+                    onClick={() => void szerkesztesMentese()}
+                    className="rounded-[var(--radius)] border border-border px-2.5 py-1 text-[12.5px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
+                  >
+                    {busy ? "Mentés…" : "Mentés"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => setSzerkesztes(null)}
+                    className="rounded-[var(--radius)] px-2.5 py-1 text-[12.5px] text-text-muted hover:text-text-secondary"
+                  >
+                    Mégse
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <BodyWithMentions body={c.body} />
+            )}
+            {(c.attachments.length > 0 || canUpload) && (
+              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+                {c.attachments.map((a) => (
+                  <span key={a.id} className="flex items-center gap-1 text-[12px]">
+                    <Paperclip size={12} className="shrink-0 text-text-muted" />
+                    <a href={a.url} target="_blank" rel="noopener noreferrer" className="text-text-accent hover:underline">
+                      {a.filename}
+                    </a>
+                    {canUpload && (
+                      <button
+                        type="button"
+                        onClick={() => csatolmanyTorlese(c.id, a)}
+                        title="Csatolmány törlése"
+                        className="text-text-muted hover:text-text-danger"
+                      >
+                        <X size={12} />
+                      </button>
+                    )}
+                  </span>
+                ))}
+                {canUpload && (
+                  <label className="cursor-pointer text-[12px] text-text-muted hover:text-text-secondary">
+                    {uploadingCommentId === c.id ? "Feltöltés…" : "+ Fájl"}
+                    <input
+                      type="file"
+                      multiple
+                      className="hidden"
+                      disabled={uploadingCommentId === c.id}
+                      onChange={(e) => {
+                        void csatolmanyFeltoltese(c.id, e.target.files);
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="relative">
+        {mentionQuery !== null && mentionMatches.length > 0 && (
+          <div className="absolute bottom-full left-0 z-10 mb-1 w-56 rounded-[var(--radius)] border border-border bg-surface-2 shadow-lg">
+            {mentionMatches.map((e) => (
+              <button
+                key={e.id}
+                type="button"
+                onClick={() => insertMention(e.full_name)}
+                className="block w-full px-3 py-1.5 text-left text-[13px] text-text-primary hover:bg-surface-3"
+              >
+                {e.full_name}
+              </button>
+            ))}
+          </div>
+        )}
+        <textarea
+          ref={textareaRef}
+          // A mező együtt nő a szöveggel (a felhasználó kérése: a komment
+          // teljes hossza mindig látszódjon) - hosszú piszkozatnál se kelljen
+          // két sorban görgetni.
+          rows={Math.min(Math.max(body.split("\n").length + 1, 2), 16)}
+          value={body}
+          onChange={(e) => handleChange(e.target.value)}
+          placeholder="Írj hozzászólást… (@ a taggeléshez)"
+          className="w-full rounded-[var(--radius)] border border-border bg-surface-2 px-2.5 py-1.5 text-[13px] text-text-primary focus:outline-none"
+        />
+      </div>
+      {pendingFiles.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap gap-2">
+          {pendingFiles.map((f, i) => (
+            <span
+              key={`${f.name}-${i}`}
+              className="flex items-center gap-1 rounded-[var(--radius)] bg-surface-2 px-2 py-0.5 text-[12px] text-text-secondary"
+            >
+              <Paperclip size={11} className="shrink-0 text-text-muted" />
+              {f.name}
+              <button
+                type="button"
+                onClick={() => setPendingFiles((prev) => prev.filter((_, j) => j !== i))}
+                className="text-text-muted hover:text-text-danger"
+              >
+                <X size={11} />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="mt-2 flex items-center gap-3">
+        <button
+          type="button"
+          disabled={busy || (!body.trim() && pendingFiles.length === 0)}
+          onClick={send}
+          className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
+        >
+          Küldés
+        </button>
+        {canUpload && (
+          <label className="cursor-pointer text-[13px] text-text-muted hover:text-text-secondary">
+            + Fájl csatolása
+            <input
+              type="file"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                // A fájlokat AZONNAL kiolvassuk: az alábbi value = "" kiüríti a
+                // FileList-et, a később lefutó állapot-frissítés már üreset látott
+                // volna - emiatt nem került fel a csatolt fájl (a felhasználó jelezte).
+                const ujFajlok = Array.from(e.target.files ?? []);
+                setPendingFiles((prev) => [...prev, ...ujFajlok]);
+                e.target.value = "";
+              }}
+            />
+          </label>
+        )}
+      </div>
+    </div>
+  );
+}

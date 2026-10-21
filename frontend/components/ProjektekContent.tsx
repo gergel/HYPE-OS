@@ -1,0 +1,244 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { Card } from "@/components/Card";
+import { DataTable } from "@/components/DataTable";
+import { ForgatasokCalendar } from "@/components/deliverable/ForgatasokCalendar";
+import { EditableStatusBadge } from "@/components/EditableStatusBadge";
+import { EditableTableCell } from "@/components/EditableTableCell";
+import { ProjectDetailModal } from "@/components/ProjectDetailModal";
+import { QuickCreateForm } from "@/components/QuickCreateForm";
+import { authFetch } from "@/lib/authFetch";
+import { useLiveTopic } from "@/lib/live";
+import type { Project, ProjectCodeOption } from "@/lib/api";
+
+// Nem importáljuk az ENTITY_PATHS-t a lib/api.ts-ből (bár csak egy sima
+// konstans) - az a modul a `next/headers`-t is importálja (szerver-oldali
+// cookie-olvasáshoz), és egy kliens komponensbe akár csak egyetlen NEM
+// type-only importja is beviszi a teljes modult a kliens bundle-be, ami
+// build hibát okoz ("next/headers" csak Server Component-ekben érhető el).
+const PROJECT_BASE_PATH = "/api/v1/projects";
+
+function formatDate(value: string | null): string {
+  return value ? value.slice(0, 10) : "–";
+}
+
+/** A Projektek oldal tényleges tartalma - a kezdeti szerver-oldali
+ * renderelés csak a legutóbb módosított projektek egy szeletét kapja meg
+ * (lásd app/projektek/page.tsx), hogy az oldal azonnal betöltődjön még sok,
+ * rég lezárt projekt mellett is - a maradékot ez a komponens tölti be a
+ * háttérben, betöltés-jelző/blokkolás nélkül.
+ *
+ * A szűrés (szabadszavas keresőmező) itt, szülő szinten fut, NEM a DataTable
+ * saját beépített szűrőjével - így ugyanaz a szűrés a táblázat ÉS a naptár
+ * nézetre is érvényes marad, akármelyiket nézi épp a felhasználó. A
+ * projektkód (ami csak egy lookup-olt szöveg, nem tényleges Project mező) is
+ * bekerül a keresett szövegbe, hogy arra is lehessen szűrni. */
+export function ProjektekContent({
+  initialProjects,
+  hasMore,
+  projectCodes,
+  statusOptions,
+  canCreate,
+  canDelete,
+  canEdit,
+}: {
+  initialProjects: Project[];
+  hasMore: boolean;
+  /** Csak a kód-címkékhez és a "+ Új projekt" választójához kell, ezért a
+   * KÖNNYŰ lista (lásd lib/api.getProjectCodeOptions). */
+  projectCodes: ProjectCodeOption[];
+  statusOptions: string[];
+  canCreate: boolean;
+  canDelete: boolean;
+  canEdit: boolean;
+}) {
+  const [projects, setProjects] = useState(initialProjects);
+  // NAPTÁR az alapértelmezett nézet: a projekt itt egy forgatási NAP, és a
+  // napi munka (mi van ma, mi jön holnap) naptárban olvasható, nem egy 800
+  // soros táblázatban. A táblázat egy kattintással elérhető marad.
+  const [view, setView] = useState<"table" | "calendar">("calendar");
+  const [query, setQuery] = useState("");
+  const [modalProjectId, setModalProjectId] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!hasMore) return;
+    authFetch(`/api/v1/projects?skip=${initialProjects.length}&limit=5000`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((rest: Project[]) => setProjects((prev) => [...prev, ...rest]))
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // A modálban történt mentés (pl. a Forgatás dátuma szerkesztése) után a
+  // ForgatasIdopontEditor router.refresh()-t hív, amitől a szerver ÚJ
+  // initialProjects szeletet ad - de a lista itt kliens-állapotban él
+  // (useState), amit a friss prop magától NEM ír felül. Enélkül a Projektek
+  // táblázat/naptár a RÉGI adatot mutatta tovább (pl. a most beállított záró
+  // dátum nélkül), amíg a felhasználó kézzel újra nem töltötte az oldalt -
+  // úgy nézett ki, mintha a mentés "elveszett" volna, pedig az adatbázisban
+  // már jó volt. A friss szeletet ezért beolvasztjuk: a benne szereplő sorok
+  // felülírják a régit, a szeletben nem szereplő (háttérben betöltött) sorok
+  // maradnak, a vadonatúj sorok pedig bekerülnek. (A React ajánlott
+  // "prop-változásra állapot-igazítás render közben" mintája - effect
+  // helyett, lásd react.dev "Adjusting some state when a prop changes".)
+  const [beolvasztott, setBeolvasztott] = useState(initialProjects);
+  if (beolvasztott !== initialProjects) {
+    setBeolvasztott(initialProjects);
+    const frissek = new Map(initialProjects.map((p) => [p.id, p]));
+    const meglevoIdk = new Set(projects.map((p) => p.id));
+    const ujak = initialProjects.filter((p) => !meglevoIdk.has(p.id));
+    setProjects([...ujak, ...projects.map((p) => frissek.get(p.id) ?? p)]);
+  }
+
+  // A lista a komponens saját állapotában él (a szerver csak az első szeletet
+  // adja), ezért a háttérfrissítésnél itt kell újratölteni - pl. amikor a
+  // naptár-szinkron új forgatást hoz be.
+  useLiveTopic("projects", () => {
+    authFetch(`/api/v1/projects?limit=5000`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((fresh: Project[] | null) => fresh && setProjects(fresh))
+      .catch(() => {});
+  });
+
+  const projectCodeById = new Map(projectCodes.map((pc) => [pc.id, pc.projektkod]));
+
+  const filteredProjects = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return projects;
+    return projects.filter((p) => {
+      const code = projectCodeById.get(p.project_code_id) ?? "";
+      const haystack = `${JSON.stringify(p)} ${code}`.toLowerCase();
+      return haystack.includes(needle);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projects, query, projectCodes]);
+
+  return (
+    <Card title={`Projektek (${filteredProjects.length}${filteredProjects.length !== projects.length ? ` / ${projects.length}` : ""})`}>
+      {canCreate && (
+        <QuickCreateForm
+          postPath={PROJECT_BASE_PATH}
+          addLabel="+ Új projekt hozzáadása"
+          fields={[
+            { name: "nev", label: "Név", required: true },
+            // A projektkód NEM kötelező (a felhasználó kérése) - a szerver is
+            // enged nélküle (lásd backend routes/projects._kosd_a_projektkodhoz):
+            // a kapunál (diszpó kiküldés) úgyis kelleni fog, addig utólag is
+            // hozzárendelhető.
+            {
+              name: "project_code_id",
+              label: "Project Code (ha van)",
+              type: "select",
+              options: projectCodes.map((pc) => ({ value: pc.id, label: pc.projektkod })),
+            },
+            { name: "forgatas_datuma", label: "Forgatás dátuma", type: "date" },
+            // Több napos forgatásnál már felvitelkor megadható a záró nap (a
+            // felhasználó kérése) - utólag a projekt adatlapján a "Forgatás
+            // dátuma" választóval is állítható.
+            { name: "forgatas_datuma_vege", label: "Forgatás vége (ha több napos)", type: "date" },
+            { name: "helyszin", label: "Helyszín" },
+          ]}
+        />
+      )}
+
+      <div className="mb-3 flex flex-wrap items-center gap-3">
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Szűrés bármelyik oszlopra…"
+          className="w-full max-w-xs rounded-[var(--radius)] border border-border bg-surface-3 px-2.5 py-1.5 text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none"
+        />
+        <div className="flex items-center gap-1 rounded-[var(--radius)] border border-border p-0.5">
+          <button
+            type="button"
+            onClick={() => setView("table")}
+            className={`rounded-[calc(var(--radius)-2px)] px-2.5 py-1 text-[12px] ${
+              view === "table" ? "bg-bg-accent text-text-accent" : "text-text-secondary hover:bg-surface-3"
+            }`}
+          >
+            Táblázat
+          </button>
+          <button
+            type="button"
+            onClick={() => setView("calendar")}
+            className={`rounded-[calc(var(--radius)-2px)] px-2.5 py-1 text-[12px] ${
+              view === "calendar" ? "bg-bg-accent text-text-accent" : "text-text-secondary hover:bg-surface-3"
+            }`}
+          >
+            Naptár
+          </button>
+        </div>
+      </div>
+
+      {view === "table" ? (
+        <DataTable<Project>
+          rows={filteredProjects}
+          emptyText={query ? "Nincs találat a szűrésre." : "Még nincs felvett projekt - importáld a Notionból, vagy adj hozzá egyet a fenti gombbal."}
+          deleteHref={canDelete ? (p) => `${PROJECT_BASE_PATH}/${p.id}` : undefined}
+          onRowClick={(id) => setModalProjectId(id)}
+          columns={[
+            {
+              header: "Név",
+              render: (p) =>
+                canEdit ? <EditableTableCell patchPath={`${PROJECT_BASE_PATH}/${p.id}`} field="nev" value={p.nev} /> : p.nev,
+              sortAccessor: (p) => p.nev,
+            },
+            {
+              header: "Projektkód",
+              render: (p) => projectCodeById.get(p.project_code_id) ?? "–",
+              sortAccessor: (p) => projectCodeById.get(p.project_code_id),
+            },
+            {
+              header: "Forgatás dátuma",
+              // Több napos forgatásnál a vég is látszik ("… – …") - a kezdő
+              // nap cellában szerkeszthető, a teljes tól-ig a részletnézet
+              // Forgatás dátuma kártyáján állítható (DateRangePicker).
+              render: (p) => {
+                const tenylegesVeg = p.veg_datum ?? p.forgatas_datuma_vege;
+                const veg =
+                  tenylegesVeg && tenylegesVeg !== p.forgatas_datuma ? ` – ${formatDate(tenylegesVeg)}` : "";
+                return canEdit ? (
+                  <span className="flex items-center gap-0.5">
+                    <EditableTableCell patchPath={`${PROJECT_BASE_PATH}/${p.id}`} field="forgatas_datuma" value={p.forgatas_datuma} type="date" />
+                    {veg && <span className="whitespace-nowrap text-text-muted">{veg}</span>}
+                  </span>
+                ) : (
+                  `${formatDate(p.forgatas_datuma)}${veg}`
+                );
+              },
+              sortAccessor: (p) => p.forgatas_datuma,
+            },
+            {
+              header: "Helyszín",
+              render: (p) =>
+                canEdit ? (
+                  <EditableTableCell patchPath={`${PROJECT_BASE_PATH}/${p.id}`} field="helyszin" value={p.helyszin} />
+                ) : (
+                  p.helyszin ?? "–"
+                ),
+              sortAccessor: (p) => p.helyszin,
+            },
+            {
+              header: "Állapot",
+              render: (p) => (
+                <EditableStatusBadge
+                  patchPath={`${PROJECT_BASE_PATH}/${p.id}`}
+                  field="allapot"
+                  value={p.allapot}
+                  options={statusOptions}
+                />
+              ),
+              sortAccessor: (p) => p.allapot,
+            },
+          ]}
+        />
+      ) : (
+        <ForgatasokCalendar projects={filteredProjects} onProjectClick={(id) => setModalProjectId(id)} />
+      )}
+
+      <ProjectDetailModal projectId={modalProjectId} onClose={() => setModalProjectId(null)} />
+    </Card>
+  );
+}

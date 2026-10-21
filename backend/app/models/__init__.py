@@ -1,56 +1,268 @@
 """Minden SQLAlchemy modell importja - ez adja a Base.metadata-t az Alembic autogenerate-hez."""
 
 from app.core.database import Base
+from app.models.admin_agent import (
+    ActionExecution,
+    ActionProposal,
+    ActionTrace,
+    AdminAgentSetting,
+    AdminTask,
+    AgentRelease,
+    AgentRun,
+    Approval,
+    Correction,
+    EvalCase,
+    EszkozProfil,
+    ForgatasProfil,
+    EvalRun,
+    LearningRun,
+    MemoryChunk,
+    Outbox,
+    PlaybookRule,
+    SourceEvent,
+    TrustPolicy,
+)
+from app.models.agi_todo import AgiTodoItem
+from app.models.automatizalas import AutomatizalasAudit, UtokovetesDokumentum
+from app.models.belsos_idoszak import BelsosIdoszak
 from app.models.callsheet import Callsheet
+from app.models.calendar_sync import CalendarSyncState
 from app.models.campaign import Campaign
 from app.models.client import Client, Contact
-from app.models.contract import Contract, ContractType
-from app.models.deliverable import Deliverable
-from app.models.employee import Employee, EmployeeType, SystemRole
+from app.models.contract import Contract, ContractTetel, ContractType
+from app.models.dashboard_config import DashboardConfig
+from app.models.deliverable import Deliverable, deliverable_contacts
+from app.models.deliverable_comment import DeliverableComment
+from app.models.deliverable_status import DeliverableBoardConfig, DeliverableStatusConfig
+from app.models.detail_section_order import DetailSectionOrder
+from app.models.detail_tab import DetailTabConfig
+from app.models.document_attachment import DocumentAttachment
+from app.models.dispo_responsible import DispoResponsible, DispoSide
+from app.models.diszpo_tabla import DiszpoCella, DiszpoMunkalap, DiszpoNezet, DiszpoOszlop, DiszpoSor
+from app.models.employee import BelsosJogviszony, Employee, EmployeeType, SystemRole
+from app.models.employee_document import EmployeeDocument
+from app.models.employee_monthly_item import EmployeeMonthlyItem
+from app.models.entity_field import CustomFieldDef, CustomFieldValue, EntityFieldConfig
 from app.models.equipment import Assignment, Equipment, TrackMode
-from app.models.feedback import Feedback
+from app.models.eszkoz_kivitel import EszkozKivitel, EszkozKivitelTetel
+from app.models.feedback import Feedback, VisszajelzesAllapot
+from app.models.field_visibility import FieldVisibilityConfig
+from app.models.bejovo_szamla import BejovoEmail, BejovoSzamla
 from app.models.finance import Expense, KpForgalom, Revenue
+from app.models.utalas_felvezetes import UtalasAdag, UtalasTetel
+from app.models.arajanlat import Arajanlat, ArajanlatTetel
+from app.models.quote import (
+    Quote,
+    QuoteCatalogCategory,
+    QuoteCatalogItem,
+    QuoteCatalogPriceHistory,
+    QuoteItem,
+    QuoteNotePreset,
+    QuoteNumberCounter,
+    QuoteTemplate,
+    QuoteTemplateItem,
+)
+from app.models.flora_feladat import FloraFeladat
+from app.models.flora_komment import FloraKomment
+from app.models.anyagbekeres import (
+    Anyagbekeres,
+    AnyagEsemeny,
+    AnyagFajl,
+    AnyagLeadas,
+    AnyagLeadasExport,
+    AnyagMappa,
+    VideoIgeny,
+    VideoIgenyForras,
+)
+from app.models.munkafelajanlas import Ajanlatkeres, AjanlatMeghivott, CimzettLista, MunkaArajanlat
+from app.models.google_oauth_token import GoogleOAuthToken
+from app.models.hatter_feladat import HatterFeladat
+from app.models.hype_todo import HypeTodoItem, hype_todo_felelosok
+from app.models.hype_todo_komment import HypeTodoKomment
+from app.models.internal_performance_certificate import (
+    InternalPerformanceCertificate,
+    InternalPerformanceCertificateInvoice,
+)
+from app.models.auto import Auto, AutoTeendo, AutoTeendoKomment
+from app.models.auto_allapot import AutoAllapotBekeres, AutoAllapotFoto
+from app.models.keret_modositas import KeretModositas
+from app.models.kotelezettseg import (
+    Kotelezettseg,
+    KotelezettsegCiklus,
+    KotelezettsegIdoszak,
+    KotelezettsegTipus,
+)
 from app.models.media import Folder, Media
-from app.models.portal import Brand, PaymentMode, Payment, Portal, PortalStatus
+from app.models.notification import Notification
+from app.models.notion_import import NotionImportMap
+from app.models.performance_certificate import (
+    PerformanceCertificate,
+    PerformanceCertificateInvoice,
+    PerformanceCertificateTetel,
+)
+from app.models.post_shoot_feedback import PostShootFeedback
+from app.models.portal import (
+    Brand,
+    PaymentMode,
+    Payment,
+    Portal,
+    PortalFeltoltoLink,
+    PortalFolder,
+    PortalImage,
+    PortalStatus,
+    PortalVideo,
+)
 from app.models.project import Project, project_crew
+from app.models.project_szamlazo import ProjectSzamlazo
 from app.models.project_code import ProjectCode
+from app.models.project_code_comment import ProjectCodeComment
 from app.models.rate import Rate
+from app.models.stocktake import StocktakeItem, StocktakeSession
 from app.models.task import Task, task_employees
 from app.models.timesheet import Timesheet
 from app.models.timeline import TimelineEvent
+from app.models.user_access import PageAccessConfig
+from app.models.krumpello import (
+    KrumpelloDolgozo,
+    KrumpelloKiadas,
+    KrumpelloMunkaora,
+    KrumpelloNap,
+)
+from app.models.megrendeloi_papir import MegrendeloiSzerzodes, MegrendeloiTig
+from app.models.vagoi_jatek import (
+    VagoEllenorzesEsemeny,
+    VagoEllenorzesKimenet,
+    VagoJatekHonap,
+    VagoJatekNap,
+)
+from app.models.vallalkozas import Vallalkozas, VallalkozasTag
+from app.models.visszavonas import ToroltRekord
+from app.models.ai_beszelgetes import AiBeszelgetes, AiFajl, AiMuvelet, AiUzenet
 
 __all__ = [
     "Base",
+    "EszkozProfil",
+    "ForgatasProfil",
+    "AgiTodoItem",
+    "AutomatizalasAudit",
+    "UtokovetesDokumentum",
     "Callsheet",
+    "CalendarSyncState",
     "Campaign",
     "Client",
     "Contact",
     "Contract",
     "ContractType",
+    "DashboardConfig",
+    "DocumentAttachment",
+    "EmployeeMonthlyItem",
     "Deliverable",
+    "DiszpoCella",
+    "DiszpoMunkalap",
+    "DiszpoNezet",
+    "DiszpoOszlop",
+    "DiszpoSor",
+    "deliverable_contacts",
+    "DeliverableBoardConfig",
+    "DeliverableStatusConfig",
+    "DeliverableComment",
+    "DetailSectionOrder",
+    "DetailTabConfig",
+    "DispoResponsible",
+    "DispoSide",
     "Employee",
     "EmployeeType",
     "SystemRole",
+    "EmployeeDocument",
     "Assignment",
     "Equipment",
+    "EszkozKivitel",
+    "EszkozKivitelTetel",
     "TrackMode",
     "Feedback",
+    "FieldVisibilityConfig",
+    "FloraFeladat",
+    "FloraKomment",
+    "GoogleOAuthToken",
+    "HypeTodoItem",
+    "HypeTodoKomment",
+    "hype_todo_felelosok",
+    "BejovoEmail",
+    "BejovoSzamla",
     "Expense",
     "KpForgalom",
     "Revenue",
+    "InternalPerformanceCertificate",
+    "InternalPerformanceCertificateInvoice",
     "Folder",
     "Media",
+    "Notification",
+    "NotionImportMap",
+    "PerformanceCertificate",
+    "PerformanceCertificateInvoice",
+    "PostShootFeedback",
     "Brand",
     "PaymentMode",
     "Payment",
     "Portal",
+    "PortalFeltoltoLink",
+    "PortalFolder",
+    "PortalImage",
     "PortalStatus",
+    "PortalVideo",
     "Project",
     "project_crew",
+    "BelsosIdoszak",
+    "BelsosJogviszony",
+    "ProjectSzamlazo",
+    "ContractTetel",
+    "PerformanceCertificateTetel",
+    "KrumpelloDolgozo",
+    "KrumpelloKiadas",
+    "KrumpelloMunkaora",
+    "KrumpelloNap",
+    "KeretModositas",
+    "MegrendeloiSzerzodes",
+    "MegrendeloiTig",
+    "VagoEllenorzesEsemeny",
+    "VagoEllenorzesKimenet",
+    "VagoJatekHonap",
+    "VagoJatekNap",
+    "Vallalkozas",
+    "VallalkozasTag",
+    "ToroltRekord",
     "ProjectCode",
+    "ProjectCodeComment",
     "Rate",
+    "StocktakeItem",
+    "StocktakeSession",
     "Task",
     "task_employees",
     "Timesheet",
     "TimelineEvent",
+    "PageAccessConfig",
+    "Arajanlat",
+    "ArajanlatTetel",
+    "Quote",
+    "QuoteCatalogCategory",
+    "QuoteCatalogItem",
+    "QuoteCatalogPriceHistory",
+    "QuoteItem",
+    "QuoteNotePreset",
+    "QuoteNumberCounter",
+    "QuoteTemplate",
+    "QuoteTemplateItem",
+    "UtalasAdag",
+    "UtalasTetel",
 ]
+
+from app.models.portal_export import PortalExport  # noqa: F401
+
+from app.models.push import PushDevice, PushDelivery  # noqa: F401
+
+from app.models.admin_ellenorzes import (  # noqa: F401
+    AdminEllenorzesBeallitas,
+    AdminKivetelJeloles,
+    AdminTevekenyseg,
+    LaraFigyelesJelzes,
+)

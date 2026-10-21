@@ -1,0 +1,157 @@
+import { formatHuf, FinanceSummary } from "@/lib/api";
+
+const MONTH_SHORT = ["jan", "feb", "márc", "ápr", "máj", "jún", "júl", "aug", "szept", "okt", "nov", "dec"];
+
+const EXPENSE_COLOR = "var(--text-orange)";
+
+/** Havi bevétel/kiadás trend - két sorozat UGYANAZON a (forint) tengelyen,
+ * nem két külön skálán, ezért csoportosított oszlopdiagram, nem kettős
+ * tengelyes vonaldiagram. Legenda mindig látszik (2 sorozat), a sávok
+ * hover-re a pontos összeget mutatják (natív title attribútum). */
+export function FinanceMonthlyChart({ trend }: { trend: FinanceSummary["havi_trend"] }) {
+  const max = Math.max(1, ...trend.flatMap((t) => [t.bevetel, t.kiadas]));
+  return (
+    <div>
+      <div className="mb-4 flex items-center gap-4 text-[12px] text-text-secondary">
+        <span className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full" style={{ background: "var(--text-blue)" }} />
+          Bevétel
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full" style={{ background: EXPENSE_COLOR }} />
+          Kiadás
+        </span>
+      </div>
+      <div className="flex h-40 items-end gap-3">
+        {trend.map((t) => {
+          const month = Number(t.month.split("-")[1]) - 1;
+          const bevPct = t.bevetel > 0 ? Math.max(3, (t.bevetel / max) * 100) : 1;
+          const kiadPct = t.kiadas > 0 ? Math.max(3, (t.kiadas / max) * 100) : 1;
+          return (
+            <div key={t.month} className="flex flex-1 flex-col items-center gap-2">
+              <div className="flex h-32 w-full items-end justify-center gap-[3px]">
+                <div
+                  title={`Bevétel (${MONTH_SHORT[month]}): ${formatHuf(t.bevetel)}`}
+                  className="w-full max-w-3.5 rounded-t-[4px]"
+                  style={{ height: `${bevPct}%`, background: "var(--text-blue)" }}
+                />
+                <div
+                  title={`Kiadás (${MONTH_SHORT[month]}): ${formatHuf(t.kiadas)}`}
+                  className="w-full max-w-3.5 rounded-t-[4px]"
+                  style={{ height: `${kiadPct}%`, background: EXPENSE_COLOR }}
+                />
+              </div>
+              <p className="text-[10px] text-text-muted">{MONTH_SHORT[month]}</p>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** MENNYI KÉSZPÉNZ VAN A HÁZIPÉNZTÁRBAN - és hogyan alakult.
+ *
+ * A házipénztár egy fizikai doboz: KP projektkód-bevétel + ATM-átvezetés -
+ * sima és fekete készpénzes kiadás, BRUTTÓBAN (lásd backend
+ * services/kassza.py).
+ *
+ * A diagram két dolgot mond egyszerre: a havi be/ki mozgást (oszlopok,
+ * ugyanazon a forint-tengelyen) és a hónap végi EGYENLEGET (a szám az oszlopok
+ * alatt). Nem kettős tengely: az egyenleg számként áll ott, nem vonalként egy
+ * másik skálán - két különböző skálájú görbe egy képen többet hazudik, mint
+ * amennyit mutat. */
+export function KasszaWidget({ kassza }: { kassza: FinanceSummary["kassza"] }) {
+  const max = Math.max(1, ...kassza.havi.flatMap((h) => [h.be, h.ki]));
+  return (
+    <div>
+      {/* A HÁZIPÉNZTÁR négy fajta tétele (lásd backend services/kassza.py):
+          az egyenleg, és mellette, miből állt össze idén. A FEKETE kiadás
+          (sosem lesz számlája) külön kiemelve: az a könyvelésben nem
+          elszámolható költség. */}
+      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="rounded-[var(--radius)] border border-border bg-surface-3 p-3">
+          <p className="text-[12px] text-text-secondary">Házipénztár egyenlege</p>
+          <p className="mt-1 text-[22px] font-semibold tracking-[-0.02em] text-text-primary tabular-nums">
+            {formatHuf(kassza.egyenleg)}
+          </p>
+          <p className="mt-1 text-[11.5px] text-text-muted">
+            idén <span className="text-text-teal">+{formatHuf(kassza.idei_be)}</span> be ·{" "}
+            <span style={{ color: EXPENSE_COLOR }}>−{formatHuf(kassza.idei_ki)}</span> ki
+          </p>
+        </div>
+        <div className="rounded-[var(--radius)] border border-border bg-surface-3 p-3">
+          <p className="text-[12px] text-text-secondary">Idei bevétel és átvezetés</p>
+          <p className="mt-1 text-[22px] font-semibold tracking-[-0.02em] text-text-primary tabular-nums">
+            {formatHuf(kassza.idei_bevetel + kassza.idei_atvezetes)}
+          </p>
+          <p className="mt-1 text-[11.5px] text-text-muted">
+            KP projektkód-kifizetés {formatHuf(kassza.idei_bevetel)} · ATM {formatHuf(kassza.idei_atvezetes)}
+          </p>
+        </div>
+        <div
+          className={`rounded-[var(--radius)] border p-3 ${
+            kassza.idei_fekete_kiadas_db > 0 ? "border-border-strong bg-bg-warning" : "border-border bg-surface-3"
+          }`}
+        >
+          <p className="text-[12px] text-text-secondary">Idei kiadás – sima / fekete</p>
+          <p className="mt-1 text-[22px] font-semibold tracking-[-0.02em] text-text-primary tabular-nums">
+            {formatHuf(kassza.idei_sima_kiadas + kassza.idei_fekete_kiadas)}
+          </p>
+          <p className="mt-1 text-[11.5px] text-text-muted">
+            sima {formatHuf(kassza.idei_sima_kiadas)} ·{" "}
+            <span className={kassza.idei_fekete_kiadas_db > 0 ? "text-text-warning" : undefined}>
+              fekete {formatHuf(kassza.idei_fekete_kiadas)} ({kassza.idei_fekete_kiadas_db} tétel)
+            </span>
+          </p>
+        </div>
+      </div>
+
+      <div className="mb-3 flex items-center gap-4 text-[12px] text-text-secondary">
+        <span className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full" style={{ background: "var(--text-teal)" }} />
+          Készpénz be
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full" style={{ background: EXPENSE_COLOR }} />
+          Készpénz ki
+        </span>
+      </div>
+
+      <div className="flex h-40 items-end gap-3">
+        {kassza.havi.map((h) => {
+          const month = Number(h.month.split("-")[1]) - 1;
+          const bePct = h.be > 0 ? Math.max(3, (h.be / max) * 100) : 1;
+          const kiPct = h.ki > 0 ? Math.max(3, (h.ki / max) * 100) : 1;
+          return (
+            <div key={h.month} className="flex flex-1 flex-col items-center gap-2">
+              <div className="flex h-32 w-full items-end justify-center gap-[3px]">
+                <div
+                  title={`Készpénz be (${MONTH_SHORT[month]}): ${formatHuf(h.be)}`}
+                  className="w-full max-w-3.5 rounded-t-[4px]"
+                  style={{ height: `${bePct}%`, background: "var(--text-teal)" }}
+                />
+                <div
+                  title={`Készpénz ki (${MONTH_SHORT[month]}): ${formatHuf(h.ki)}`}
+                  className="w-full max-w-3.5 rounded-t-[4px]"
+                  style={{ height: `${kiPct}%`, background: EXPENSE_COLOR }}
+                />
+              </div>
+              <p className="text-[10px] text-text-muted">{MONTH_SHORT[month]}</p>
+              <p
+                className={`text-[10px] ${h.egyenleg < 0 ? "text-text-danger" : "text-text-secondary"}`}
+                title={`A hónap végén a kasszában: ${formatHuf(h.egyenleg)}`}
+              >
+                {formatHuf(h.egyenleg)}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+      <p className="mt-3 text-[12px] text-text-muted">
+        A készpénzesnek jelölt bevételek és kiadások különbsége, bruttóban. A hónap alatti szám a hónap VÉGI
+        egyenleg.
+      </p>
+    </div>
+  );
+}

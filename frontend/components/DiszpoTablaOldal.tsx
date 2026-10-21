@@ -1,0 +1,146 @@
+import { notFound } from "next/navigation";
+import Link from "next/link";
+import { Card } from "@/components/Card";
+import { TopBar } from "@/components/TopBar";
+import { DiszpoTablaRacs } from "@/components/DiszpoTablaRacs";
+import { MunkanapokKartya } from "@/components/MunkanapokKartya";
+import {
+  getCurrentUser,
+  getDiszpoMunkalap,
+  getDiszpoMunkalapok,
+  getDiszpoNezet,
+  getEmployees,
+  getMyPagePermissions,
+} from "@/lib/api";
+import { szerepkorei } from "@/lib/permissions";
+
+const PAGE = "/diszpo-tabla";
+
+/** A HYPE diszpótábla egy ÉVE (2026: a Google Sheet munkalapjai a
+ * rendszerben; 2027: már itt indult, tömör fejléccel).
+ *
+ * Ez a tábla nem csak beosztás volt: a CELLA SZÍNE hordozta a legfontosabb
+ * adatot, azt, hogy ki melyik nap dolgozott. Ebből derül ki, hány munkanapja
+ * van valakinek egy hónapban - és ez dönti el, mikor fogy el a szerződött
+ * napjainak száma, vagyis mikortól kell a PLUSZ NAP díján számolni a
+ * projektek önköltségébe (lásd backend services/munkanap_szamlalo.py).
+ *
+ * A munkalapok fülekként állnak egymás mellett, ahogy a Sheetben. */
+export async function DiszpoTablaOldal({
+  ev,
+  alap,
+  lap,
+  rendezett = false,
+}: {
+  /** Melyik év táblája (HYPE 2026, HYPE 2027). */
+  ev: number;
+  /** Az oldal útvonala - a fülek linkjeihez. */
+  alap: string;
+  lap?: string;
+  /** Az átláthatóbb, „rendezett” rács (a HYPE 2027 táblától - a felhasználó
+   * kérése): hónap-ugró, hétvége- és mai-nap kiemelés, osztály-színek,
+   * színmagyarázat, és a mai naphoz görgetve nyílik - lásd DiszpoTablaRacs. */
+  rendezett?: boolean;
+}) {
+  const [munkalapok, pagePermissions] = await Promise.all([getDiszpoMunkalapok(ev), getMyPagePermissions()]);
+  const cim = `HYPE ${ev} tábla`;
+
+  if (munkalapok.length === 0) {
+    return (
+      <div className="flex flex-1 flex-col">
+        <TopBar />
+        <div className="flex-1 p-4 md:p-8">
+          <Card title={cim}>
+            <p className="mb-3 text-[13px] text-text-secondary">
+              A táblázat még üres. A Google Táblázat-szinkron ki van kapcsolva (a felhasználó
+              kérése) - a tábla itt, a rendszerben vezetve él tovább.
+            </p>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  const aktivId = lap ? Number(lap) : munkalapok[0].id;
+  const aktiv = munkalapok.find((m) => m.id === aktivId);
+  if (!aktiv) notFound();
+
+  const [munkalap, emberek, currentUser, sajatNezet] = await Promise.all([
+    getDiszpoMunkalap(aktiv.id),
+    getEmployees(),
+    getCurrentUser(),
+    // A SZEMÉLYES nézet (saját oszlop-elrejtés, szélességek) - a rács ezzel
+    // indul, hogy újratöltés után is ugyanúgy nézzen ki (a felhasználó kérése).
+    getDiszpoNezet(aktiv.id),
+  ]);
+  if (!munkalap) notFound();
+
+  const canEdit = pagePermissions === null || !!pagePermissions[PAGE]?.includes("edit");
+  // A sor/oszlop TÖRLÉSE külön jog: az a tartalmát is viszi, és egy 146
+  // oszlopos munkalapon nem visszavonható egy kattintással.
+  const canDelete = pagePermissions === null || !!pagePermissions[PAGE]?.includes("delete");
+
+  // A "Munkanapok" kártya kezdő hónapja - a mai. A kártya ezután a saját
+  // kliens-oldali állapotát vezeti (lásd MunkanapokKartya), a rács tehát nem
+  // renderelődik újra, amikor ott hónapot vált valaki.
+  const ma = new Date();
+
+  return (
+    <div className="flex flex-1 flex-col">
+      <TopBar />
+      <div className="flex-1 space-y-6 p-4 md:p-8">
+        <Card title={cim}>
+          {/* A FÜLEK - ahogy a Sheetben, balról jobbra. A Google
+              Táblázat-szinkron gombja lekerült (a felhasználó kérése: többet
+              ne szinkronizáljon) - a tábla itt, a rendszerben vezetve él. */}
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3">
+            <div className="flex flex-wrap gap-1.5">
+              {munkalapok.map((m) => (
+                <Link
+                  key={m.id}
+                  href={`${alap}?lap=${m.id}`}
+                  className={`rounded-[var(--radius)] px-3 py-1.5 text-[13px] transition-colors ${
+                    m.id === aktiv.id
+                      ? "bg-bg-accent text-text-accent"
+                      : "text-text-secondary hover:bg-surface-3"
+                  }`}
+                >
+                  {m.nev}
+                </Link>
+              ))}
+            </div>
+          </div>
+
+          <DiszpoTablaRacs
+            // Fülváltáskor tiszta lappal indul (görgetés, kijelölés) - a
+            // „rendezett” rács így minden fülön a mai naphoz ugrik.
+            key={munkalap.id}
+            munkalap={munkalap}
+            canEdit={canEdit}
+            canDelete={canDelete}
+            // Az oszlop-ember kötés vezérlője CSAK az adminnak (a felhasználó
+            // kérése) - másnál a kijelöléskor nem jelenik meg a választó.
+            // A TELJES szerepkör-halmazt nézzük (szerepkorei), nem csak az
+            // elsődleges role mezőt: akinek az adminság a további szerepkörei
+            // közt van, annál a szűk `role === "admin"` ellenőrzés miatt a
+            // rejtés-vezérlők el sem látszottak (a felhasználó hibajelzése) -
+            // a backend eddig is a teljes halmazt nézte (van_szerepkore).
+            canEmberKotes={szerepkorei(currentUser).includes("admin")}
+            // A REJTETT oszlopok/sorok is csak az adminnak látszanak (a
+            // felhasználó kérése) - neki halványítva megjelennek, más elől
+            // tényleg eltűnnek, és rejteni/visszahozni is csak ő tud.
+            rejtettetLatja={szerepkorei(currentUser).includes("admin")}
+            emberek={emberek.map((e) => ({ id: e.id, nev: e.full_name }))}
+            kezdoNezet={sajatNezet ?? undefined}
+            rendezett={rendezett}
+          />
+        </Card>
+
+        {/* A TÁBLÁZAT LÉNYEGE SZÁMOKBAN: ki hány napot dolgozott ebben a
+            hónapban, és kinél fogyott el a szerződött napszám. Külön
+            kliens-komponens - lásd a fenti megjegyzést. */}
+        <MunkanapokKartya kezdoEv={ma.getFullYear()} kezdoHonap={ma.getMonth() + 1} />
+      </div>
+    </div>
+  );
+}

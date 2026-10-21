@@ -1,0 +1,784 @@
+"""Az Utómunka (Deliverable) oldal kapcsolatai és gombjai: ki hozta létre / kire
+van kiosztva, vinyó-lista, Start/Stop időmérés, megrendelői kontaktok +
+levezetett email-lista, "Visszajelzés küldése" gomb (a felhasználó által
+küldött Notion automatizmus screenshot alapján) és a chat-szerű kommentek."""
+
+import re
+from collections.abc import Iterable
+from datetime import datetime, timezone
+
+from fastapi import HTTPException
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.core.security import check_page_action
+from app.models.client import Contact
+from app.models.deliverable import Deliverable
+from app.models.deliverable_comment import DeliverableComment
+from app.models.employee import Employee
+from app.models.feedback import Feedback
+from app.models.project import Project
+from app.models.rate import Rate
+from app.models.timesheet import Timesheet
+from app.models.user_access import PageAccessConfig
+from app.schemas.deliverable_actions import (
+    AssignableEmployee,
+    CommentRead,
+    ContactOption,
+    TimerEmployeeSummary,
+    TimerRunningEntry,
+    TimerState,
+    VinyoOptions,
+)
+from app.services import attachments, notifications
+
+UTOMUNKA_PAGE = "/utomunka"
+
+
+def list_assignable_employees(db: Session) -> list[AssignableEmployee]:
+    """Kik választhatók az "Assigned To" mezőbe - csak azok, akiknek van
+    jelszavuk (be tudnak lépni) ÉS akiknek nincs korlátozva a hozzáférése az
+    /utomunka oldaltól (nincs PageAccessConfig soruk, vagy page_permissions=null,
+    vagy szerepel benne az /utomunka kulcs)."""
+    configs = {c.employee_id: c.page_permissions for c in db.scalars(select(PageAccessConfig))}
+    employees = db.scalars(select(Employee).where(Employee.hashed_password.is_not(None), Employee.is_active.is_(True)))
+    result = []
+    for e in employees:
+        page_permissions = configs.get(e.id)
+        if e.id not in configs or page_permissions is None or UTOMUNKA_PAGE in page_permissions:
+            result.append(AssignableEmployee(id=e.id, full_name=e.full_name))
+    return sorted(result, key=lambda e: e.full_name)
+
+
+VINYO_OPTIONS = [
+    "HYPE_Kiemelt projektek",
+    "HYPE_01", "HYPE_02", "HYPE_03", "HYPE_04", "HYPE_05", "HYPE_06", "HYPE_07", "HYPE_08",
+    "HYPE_09", "HYPE_10", "HYPE_11", "HYPE_13", "HYPE_14", "HYPE_15", "HYPE_16", "HYPE_17",
+    "HYPE_18", "HYPE_19", "HYPE_21", "HYPE_22",
+    "MyBook_26_01", "MyBook_26_02", "MyBook_26_03", "MyBook_26_04", "MyBook_26_05",
+    "MyBook_25_01", "MyBook_25_02", "MyBook_25_03", "MyBook_25_04", "MyBook_25_05",
+    "MyBook_25_06", "MyBook_25_07", "MyBook_25_08", "MyBook_11", "MyBook_12", "MyBook_16",
+    "Pajta_01", "Pajta_02", "Pajta_03", "Pajta_04",
+    # Az Archive_23_01..03, Archive_24_02 és Sárga_02 vinyók törölve (a
+    # felhasználó kérése) - lásd az alembic d2a6b94e8c31 adat-migrációt.
+    "Sárga_01",
+    "Archive_24_01", "MyBook_25_09", "Archive_24_04", "MTE_01", "BBGP_01",
+    "Archive_24_10",
+    "Archive_23_04", "Archive_23_05", "Archive_23_06",
+    "Archive_21_101", "Archive_21_102", "Archive_21_103", "Archive_21_104", "Archive_21_105", "Archive_21_106",
+    "HYPE_F_01", "HYPE_F_02", "MyBook_F_01", "MyBook_F_02",
+    "MEGSEMMISÜLT",
+]
+
+
+def get_vinyo_options(db: Session) -> VinyoOptions:
+    """A Notionben kézzel konfigurált, rögzített sorrendű vinyó-lista (lásd a
+    felhasználó által küldött screenshotok) - ez adja a frontend multi-select
+    választható opcióit. A ténylegesen valaha használt, de a fenti listából
+    hiányzó értékeket (pl. régi, azóta törölt Notion opciók) a végére fűzzük,
+    hogy semmilyen historikus adat ne tűnjön el a választhatók közül."""
+    # A Notion sémájából szinkronizált hivatalos lista az elsődleges (lásd
+    # notion_import/importers_wave2.import_vinyo_sync) - a kódban rögzített
+    # VINYO_OPTIONS csak tartalék, amíg a szinkron egyszer le nem futott.
+    from app.models.deliverable_status import DeliverableBoardConfig
+
+    config = db.query(DeliverableBoardConfig).order_by(DeliverableBoardConfig.id).first()
+    if config is not None and isinstance(config.vinyo_opciok, list) and config.vinyo_opciok:
+        declared = [str(v) for v in config.vinyo_opciok]
+    else:
+        declared = list(VINYO_OPTIONS)
+    declared_set = set(declared)
+    extras: dict[str, None] = {}
+    for (raw,) in db.execute(select(Deliverable.vinyok).where(Deliverable.vinyok.is_not(None))):
+        if isinstance(raw, list):
+            for v in raw:
+                if isinstance(v, str) and v not in declared_set and v not in extras:
+                    extras[v] = None
+    options = declared + sorted(extras.keys())
+    # A vinyók színei (a felhasználó kérése) - csak a ténylegesen létező
+    # nevekre, hogy egy rég törölt vinyó színe ne utazzon feleslegesen.
+    szinek: dict[str, str] = {}
+    if config is not None and isinstance(config.vinyo_szinek, dict):
+        opcio_halmaz = set(options)
+        szinek = {str(k): str(v) for k, v in config.vinyo_szinek.items() if str(k) in opcio_halmaz and v}
+    return VinyoOptions(options=options, szinek=szinek)
+
+
+def _recompute_email_list(deliverable: Deliverable) -> None:
+    emails = [c.email for c in deliverable.megrendeloi_kontaktok if c.email]
+    deliverable.megrendeloi_email_cimek = ", ".join(emails) if emails else None
+
+
+def set_contacts(db: Session, deliverable: Deliverable, contact_ids: list[int]) -> Deliverable:
+    """A "Megrendelői kontaktok" relációt cseréli le a megadott kontakt-ID-kre,
+    és újraszámolja a megrendeloi_email_cimek formula-mezőt (vesszővel
+    elválasztott email-lista) - ez utóbbi sosem szerkeszthető közvetlenül."""
+    contacts = db.scalars(select(Contact).where(Contact.id.in_(contact_ids))).all() if contact_ids else []
+    deliverable.megrendeloi_kontaktok = list(contacts)
+    _recompute_email_list(deliverable)
+    db.commit()
+    db.refresh(deliverable)
+    return deliverable
+
+
+def list_contacts(deliverable: Deliverable) -> list[ContactOption]:
+    return [ContactOption(id=c.id, full_name=c.full_name, email=c.email) for c in deliverable.megrendeloi_kontaktok]
+
+
+def aktualis_orabere(db: Session, employee_id: int) -> float | None:
+    """A munkatárs MOSTANI órabére (Rate.orabler) - csak a mérés indításakor
+    (illetve utólagos javításkor, ha akkor még nem volt rögzítve) kérdezzük le.
+    Utána a Timesheet.akkori_orabere befagy: ha valaki később többet keres, az
+    a RÉGI költségeket nem írhatja át.
+
+    Ha több Rate sora is van (mert az emelést új sorként vették fel, nem a
+    régit írták át), a LEGUTÓBBI (legnagyobb id) számít - az a mostani
+    órabére.
+
+    Az órabéreket a KÉRÉS EGÉSZÉRE, EGYETLEN lekérdezéssel szedjük össze (a
+    Session.info-ban tárolva). Enélkül a projektkód-lista minden egyes kódnál
+    újra lekérdezte ugyanazoknak a vágóknak az órabérét: 800 kódnál ez 7200
+    külön kör volt - a lista lekérdezéseinek 99%-a. Emiatt tartott a betöltés
+    másodpercekig, hálózaton át (élesben az adatbázis nem a szolgáltatás
+    mellett van) pedig akár percekig. Egy órabér egy kérésen belül nem
+    változik meg; aki átírja, az a következő kérésben már az újat látja."""
+    return _orabérek(db).get(employee_id)
+
+
+def _orabérek(db: Session) -> dict[int, float]:
+    """{munkatárs id: mostani órabér} - kérésenként egyszer, egy lekérdezésből.
+
+    A rates tábla kicsi (munkatársanként pár sor), ezért olcsóbb egyben
+    behozni, mint emberenként külön kérdezni. Ha valakinek több sora van, a
+    LEGUTÓBBI (legnagyobb id) marad érvényben: id szerint növekvő sorrendben
+    olvassuk, így a későbbi felülírja a korábbit."""
+    gyorsito = db.info.get("orabér_gyorsito")
+    if gyorsito is None:
+        gyorsito = {}
+        for employee_id, orabler in db.execute(
+            select(Rate.employee_id, Rate.orabler).where(Rate.orabler.is_not(None)).order_by(Rate.id)
+        ).all():
+            gyorsito[employee_id] = float(orabler)
+        db.info["orabér_gyorsito"] = gyorsito
+    return gyorsito
+
+
+def szamolt_koltseg(percek: float, orabere: float | None) -> float | None:
+    if orabere is None:
+        return None
+    return round((percek / 60) * float(orabere), 2)
+
+
+def start_timer(db: Session, deliverable: Deliverable, current_user: Employee) -> None:
+    """"Start" gomb - új, nyitott (end_date=None) Timesheet sort hoz létre a
+    bejelentkezett felhasználóhoz - egyszerre csak egy fusson, különben a
+    Stop nem tudná egyértelműen eldönteni, melyiket zárja le."""
+    open_row = db.scalar(
+        select(Timesheet).where(
+            Timesheet.deliverable_id == deliverable.id,
+            Timesheet.employee_id == current_user.id,
+            Timesheet.end_date.is_(None),
+        )
+    )
+    if open_row is not None:
+        raise ValueError("Már fut egy időmérés ehhez az anyaghoz - előbb állítsd le.")
+
+    db.add(
+        Timesheet(
+            employee_id=current_user.id,
+            deliverable_id=deliverable.id,
+            start_date=datetime.now(timezone.utc),
+            akkori_orabere=aktualis_orabere(db, current_user.id),
+        )
+    )
+    db.commit()
+
+
+def stop_timer(db: Session, deliverable: Deliverable, current_user: Employee, employee_id: int | None = None) -> None:
+    """"Stop" gomb - lezárja a nyitott Timesheet sort, kiszámolja a ledolgozott
+    percet és (ha van óradíj) a költséget.
+
+    `employee_id`: MÁS ember mérésének leállítása (admin joga, lásd a hívó
+    végpontot) - erre azért van szükség, mert egy elfelejtett, éjszakán át
+    futó mérőt csak az tud lezárni, aki elindította, ő viszont épp nincs
+    gépnél."""
+    cel_id = employee_id if employee_id is not None else current_user.id
+    open_row = db.scalar(
+        select(Timesheet).where(
+            Timesheet.deliverable_id == deliverable.id,
+            Timesheet.employee_id == cel_id,
+            Timesheet.end_date.is_(None),
+        )
+    )
+    if open_row is None:
+        raise ValueError("Nincs futó időmérés ehhez az anyaghoz.")
+
+    open_row.end_date = datetime.now(timezone.utc)
+    minutes = open_row.idotartam_perc or 0
+    open_row.time_minutes = minutes
+    # Ha az indításkor még nem volt órabér rögzítve (pl. akkor még nem volt Rate
+    # sora), most pótoljuk - innentől ez a sor órabére, egy későbbi emelés már
+    # nem írja át.
+    if open_row.akkori_orabere is None:
+        open_row.akkori_orabere = aktualis_orabere(db, open_row.employee_id)
+    open_row.koltseg = szamolt_koltseg(minutes, open_row.akkori_orabere)
+    # Az utómunkán is nyilvántartjuk, mikor állították le UTOLJÁRA a mérőt -
+    # ugyanaz az adat, amit a Notion importban a 'Timesheet Public' End Date
+    # mezője hoz (lásd notion_import/importers_wave2.py). Így a listákon és a
+    # kapcsolódó táblákban is látszik, soronkénti külön lekérdezés nélkül.
+    deliverable.vagas_leallitva = open_row.end_date
+    db.commit()
+
+
+def _may_see_costs(db: Session, employee: Employee) -> bool:
+    """A munkaidőhöz tartozó FORINT összegeket csak az látja, akinek a Pénzügy
+    oldalhoz van hozzáférése - a vágóknak jellemzően nincs, nekik az idő
+    releváns, a bekerülési költség nem."""
+    try:
+        check_page_action(db, employee, "/penzugyek", "view")
+    except HTTPException:
+        return False
+    return True
+
+
+def sor_orabere(db: Session, row: Timesheet, gyorsito: dict[int, float | None]) -> float | None:
+    """Melyik órabérrel számol ez a sor: elsődlegesen a méréshez RÖGZÍTETT
+    órabér (az az akkori, befagyasztott ár), annak híján a munkatárs mai
+    órabére. A gyorsító azért kell, hogy egy anyag több tucat sorára ne
+    kérdezzük le ugyanazt az órabért újra és újra."""
+    if row.akkori_orabere is not None:
+        return float(row.akkori_orabere)
+    if row.employee_id not in gyorsito:
+        gyorsito[row.employee_id] = aktualis_orabere(db, row.employee_id)
+    return gyorsito[row.employee_id]
+
+
+def sor_percei(row: Timesheet) -> float:
+    """A soron eltöltött idő. A rögzített perc az elsődleges (a Notionból
+    hozott mérésnél sokszor CSAK ez van meg), különben a két időpont
+    különbsége."""
+    if row.time_minutes is not None:
+        return float(row.time_minutes)
+    return float(row.idotartam_perc or 0)
+
+
+def sor_koltsege(db: Session, row: Timesheet, gyorsito: dict[int, float | None]) -> float | None:
+    """Egy munkaidő-sor költsége.
+
+    Ha van rögzített összeg (a mérés leállításakor számolt, vagy a Notionból
+    hozott), az a mérvadó. Ha nincs - és az importált soroknál jellemzően
+    nincs -, akkor az IDŐBŐL és az órabérből számoljuk, mert enélkül a
+    felületen csak egy gondolatjel állna, és a vágás költsége sehol nem
+    jönne ki."""
+    if row.koltseg is not None:
+        return float(row.koltseg)
+    return szamolt_koltseg(sor_percei(row), sor_orabere(db, row, gyorsito))
+
+
+def anyag_osszesitok(db: Session, deliverable_ids: list[int]) -> dict[int, dict[str, float]]:
+    """Anyagonként a MÉRT idő és az abból adódó költség - egyetlen lekérdezésből.
+
+    Ez a VÁGÁS ÁRÁNAK egyetlen forrása: ugyanaz a szám, ami az anyag oldalán a
+    "Munkaidő-elszámolások" tábla alján áll. A `Deliverable.koltseg` mező NEM
+    használható erre: az egy régi, kézzel/importból beírt összeg, ami nem
+    követi a méréseket - egy utólag rögzített vagy törölt sor után ott elavult
+    szám maradna, és a projekt költsége hazudna.
+
+    A még FUTÓ mérések kimaradnak: azoknak nincs végleges idejük. A felület a
+    futó mérést másodpercenként külön mutatja (lásd TimerControls), a rögzített
+    költségbe viszont csak a leállított sorok kerülnek."""
+    if not deliverable_ids:
+        return {}
+    sorok = db.scalars(select(Timesheet).where(Timesheet.deliverable_id.in_(deliverable_ids))).all()
+    return sorok_osszesitese(db, sorok)
+
+
+def sorok_osszesitese(db: Session, sorok: Iterable[Timesheet]) -> dict[int, dict[str, float]]:
+    """Ugyanaz, de MÁR BETÖLTÖTT munkaidő-sorokból - így a hívó eldöntheti,
+    hogy kérdez-e külön (lásd anyag_osszesitok), vagy egy eager loaddal
+    behozott kapcsolatból dolgozik. A projektkód-lista az utóbbit teszi:
+    soronként külön lekérdezve ez több száz kör lenne."""
+    gyorsito: dict[int, float | None] = {}
+    eredmeny: dict[int, dict[str, float]] = {}
+    for row in sorok:
+        if row.deliverable_id is None:
+            continue
+        if row.end_date is None and row.start_date is not None:
+            continue
+        cel = eredmeny.setdefault(row.deliverable_id, {"percek": 0.0, "koltseg": 0.0})
+        cel["percek"] += sor_percei(row)
+        koltseg = sor_koltsege(db, row, gyorsito)
+        if koltseg is not None:
+            cel["koltseg"] += koltseg
+    return eredmeny
+
+
+def anyag_koltsege(osszesitok: dict[int, dict[str, float]], deliverable: Deliverable) -> float:
+    """Egy anyag vágási ára a projekt költségéhez.
+
+    Elsődlegesen a MÉRT munkaidőből (ez a valós szám, ez áll az anyag oldalán
+    a "Munkaidő-elszámolások" tábla alján is). A `Deliverable.koltseg` mező
+    csak akkor jön szóba, ha az anyagon EGYÁLTALÁN NINCS mérés: a régi,
+    Notionból hozott anyagoknál ez az egyetlen ismert összeg, és nullát írni
+    oda rosszabb hazugság lenne, mint egy régi számot.
+
+    Amíg van mérés, a mező NEM számít - épp ez volt a hiba: a mező nem követi a
+    méréseket, tehát egy utólag rögzített vagy törölt sor után elavult szám
+    maradt benne."""
+    sor = osszesitok.get(deliverable.id)
+    if sor is not None:
+        return float(sor["koltseg"])
+    return float(deliverable.koltseg or 0)
+
+
+def get_timer_state(db: Session, deliverable: Deliverable, current_user: Employee) -> TimerState:
+    rows = db.scalars(select(Timesheet).where(Timesheet.deliverable_id == deliverable.id)).all()
+
+    my_running_since = None
+    futo: list[tuple[int, datetime, float | None]] = []
+    by_employee_minutes: dict[int, float] = {}
+    by_employee_cost: dict[int, float] = {}
+    sor_koltsegek: dict[int, float] = {}
+    orabere_gyorsito: dict[int, float | None] = {}
+    for row in rows:
+        if row.end_date is None and row.start_date is not None:
+            # Az órabért is visszaadjuk, hogy a felület a MÉG FUTÓ mérés
+            # költségét is tudja másodpercenként számolni (lásd TimerControls).
+            futo.append((row.employee_id, row.start_date, sor_orabere(db, row, orabere_gyorsito)))
+            if row.employee_id == current_user.id:
+                my_running_since = row.start_date
+            continue
+        # Minden, ami NEM fut, beleszámít a bontásba - az is, aminek nincs
+        # kezdő/záró időpontja, csak rögzített perce. (A Notionból hozott
+        # méréseknél előfordul, hogy csak a mért idő van meg; enélkül az
+        # anyagon lett volna összes idő, de nem látszott volna, KI dolgozta.)
+        by_employee_minutes[row.employee_id] = by_employee_minutes.get(row.employee_id, 0) + sor_percei(row)
+        koltseg = sor_koltsege(db, row, orabere_gyorsito)
+        if koltseg is not None:
+            by_employee_cost[row.employee_id] = by_employee_cost.get(row.employee_id, 0) + koltseg
+            sor_koltsegek[row.id] = koltseg
+
+    employee_ids = list({*by_employee_minutes.keys(), *(eid for eid, _, _ in futo)})
+    names = {e.id: e.full_name for e in db.scalars(select(Employee).where(Employee.id.in_(employee_ids)))} if employee_ids else {}
+
+    by_employee = [
+        TimerEmployeeSummary(
+            employee_id=eid,
+            full_name=names.get(eid, "Ismeretlen"),
+            total_minutes=minutes,
+            total_cost=by_employee_cost.get(eid),
+        )
+        for eid, minutes in by_employee_minutes.items()
+    ]
+    total_minutes = sum(by_employee_minutes.values())
+    total_cost = sum(by_employee_cost.values()) if by_employee_cost else None
+
+    # A költséget nem csak elrejtjük a felületen: aki nem láthatja, annak a
+    # válaszban sincs benne. Ez az órabérre is áll - abból ki lehetne számolni.
+    lathat_koltseget = _may_see_costs(db, current_user)
+    if not lathat_koltseget:
+        by_employee = [s.model_copy(update={"total_cost": None}) for s in by_employee]
+        total_cost = None
+        sor_koltsegek = {}
+
+    running = [
+        TimerRunningEntry(
+            employee_id=eid,
+            full_name=names.get(eid, "Ismeretlen"),
+            since=since,
+            orabere=orabere if lathat_koltseget else None,
+        )
+        for eid, since, orabere in futo
+    ]
+
+    return TimerState(
+        my_running_since=my_running_since,
+        running=running,
+        by_employee=by_employee,
+        total_minutes=total_minutes,
+        total_cost=total_cost,
+        sor_koltsegek=sor_koltsegek,
+    )
+
+
+#: A pontozás skálája. Egy helyen áll, hogy a felület és az ellenőrzés
+#: sose csússzon szét.
+PONT_MIN, PONT_MAX = 1, 10
+
+
+def _ellenoriz_pont(nev: str, ertek: float | None) -> None:
+    if ertek is None:
+        return
+    if not PONT_MIN <= ertek <= PONT_MAX:
+        raise ValueError(f"A(z) {nev} pontszám {PONT_MIN} és {PONT_MAX} közé eshet (kapott: {ertek}).")
+
+
+def forgatasok_stabbal(db: Session, deliverable: Deliverable) -> list[tuple[Project, list[str]]]:
+    """Az anyaghoz tartozó forgatás(ok) és a stábjuk neve.
+
+    Ha az anyag közvetlenül egy forgatáshoz kötött, azé; ha csak
+    projektkódhoz, a kód összes forgatásáé. A stáb a diszpós stáblista
+    (Project.crew) plusz az alvállalkozók (alvallalkozo_stab)."""
+    projektek: list[Project] = []
+    if deliverable.project_id is not None:
+        projekt = db.get(Project, deliverable.project_id)
+        if projekt is not None:
+            projektek = [projekt]
+    elif deliverable.project_code_id is not None:
+        projektek = list(
+            db.scalars(
+                select(Project)
+                .where(Project.project_code_id == deliverable.project_code_id)
+                .order_by(Project.forgatas_datuma)
+            ).all()
+        )
+    eredmeny: list[tuple[Project, list[str]]] = []
+    for projekt in projektek:
+        nevek: list[str] = []
+        for ember in list(projekt.crew) + list(getattr(projekt, "alvallalkozo_stab", []) or []):
+            if ember.full_name and ember.full_name not in nevek:
+                nevek.append(ember.full_name)
+        eredmeny.append((projekt, nevek))
+    return eredmeny
+
+
+#: A kötelező megjegyzés legkisebb hossza, ahol a visszajelzés nem hagyható ki.
+MEGJEGYZES_MIN = 50
+
+
+def megjegyzes_hossza(szoveg: str | None) -> int:
+    """A megjegyzés hossza ÖSSZEVONT szóközökkel - a szóköz-billentyű
+    nyomkodása ne töltse fel az 50 karaktert."""
+    return len(" ".join((szoveg or "").split()))
+
+
+def kihagyhato_a_visszajelzes(db: Session, deliverable: Deliverable) -> bool:
+    """A vágói visszajelzés NEM hagyható ki, ha az anyag egy KONKRÉT
+    forgatáshoz (projekthez) kötött, és azon volt stáb (a felhasználó kérése):
+    ott nekik szól a visszajelzés. Csak a PROJEKT számít, a projektkód nem:
+    egy kód akár egy hónapot is átölel, és alatta vannak forgatás nélküli
+    anyagok is - azoknál a kód másik forgatásának stábja nem tiltja a
+    kihagyást."""
+    if deliverable.project_id is None:
+        return True
+    return not any(nevek for _, nevek in forgatasok_stabbal(db, deliverable))
+
+
+def send_visszajelzes(
+    db: Session,
+    deliverable: Deliverable,
+    current_user: Employee,
+    *,
+    nyersanyag_felhasznalhatosaga: float | None = None,
+    technikai_helyesseg: float | None = None,
+    kreativ_kepivilag: float | None = None,
+    megjegyzes: str | None = None,
+    kihagyas_indoka: str | None = None,
+) -> Feedback:
+    """Egy vágói visszajelzés rögzítése az űrlapról.
+
+    Három pontszám (1-10) és egy szöveges rész. A pontszámok üresen is
+    hagyhatók - van, amikor csak leírni akar valamit a vágó -, de legalább az
+    egyiket kérjük, különben a visszajelzés nem mond semmit.
+
+    A kész anyag linkjét MÁSOLJUK a rekordba (lásd models/feedback.py), és az
+    anyagra is ráírjuk a mostani pontszámokat, hogy a listákban a legutóbbi
+    értékelés látszódjon - a történetet viszont a Feedback sorok őrzik."""
+    # KIHAGYÁS (a felhasználó kérése): az automatikusan feldobott űrlap
+    # kihagyható, de csak indoklással - ilyenkor pontszám nem kell, a szöveg
+    # maga az indok, és a sor nem küldhető ki a stábnak (nem_kuldjuk). Az
+    # ellenőrzésbe-tétel feltételét viszont teljesíti.
+    if (kihagyas_indoka or "").strip():
+        from app.models.feedback import VisszajelzesAllapot
+
+        if not kihagyhato_a_visszajelzes(db, deliverable):
+            raise ValueError(
+                "Ez a visszajelzés nem hagyható ki: az anyag forgatásán stáb dolgozott - "
+                "nekik szól, kérjük, töltsd ki."
+            )
+
+        feedback = Feedback(
+            deliverable_id=deliverable.id,
+            project_id=deliverable.project_id,
+            visszajelzo_employee_id=current_user.id,
+            visszajelzes_szoveg=(kihagyas_indoka or "").strip(),
+            kesz_anyag_url=deliverable.kesz_anyag_url,
+            kihagyva=True,
+            allapot=VisszajelzesAllapot.NEM_KULDJUK,
+        )
+        db.add(feedback)
+        db.commit()
+        db.refresh(feedback)
+        return feedback
+
+    _ellenoriz_pont("nyersanyag felhasználhatósága", nyersanyag_felhasznalhatosaga)
+    _ellenoriz_pont("technikai helyesség", technikai_helyesseg)
+    _ellenoriz_pont("kreativitás és képi világ", kreativ_kepivilag)
+
+    szoveg = (megjegyzes or "").strip() or None
+    if nyersanyag_felhasznalhatosaga is None and technikai_helyesseg is None and kreativ_kepivilag is None and not szoveg:
+        raise ValueError("Adj legalább egy pontszámot vagy írj megjegyzést.")
+    # Ahol a visszajelzés NEM hagyható ki (az anyag forgatásán stáb dolgozott),
+    # ott a szöveges megjegyzés is kötelező, legalább MEGJEGYZES_MIN karakter
+    # (a felhasználó kérése) - egy betű vagy pár szóköz nem visszajelzés.
+    if not kihagyhato_a_visszajelzes(db, deliverable) and megjegyzes_hossza(szoveg) < MEGJEGYZES_MIN:
+        raise ValueError(
+            f"Ehhez az anyaghoz a megjegyzés kötelező, legalább {MEGJEGYZES_MIN} karakter "
+            f"(most {megjegyzes_hossza(szoveg)}) - a forgatás stábjának szól."
+        )
+
+    feedback = Feedback(
+        deliverable_id=deliverable.id,
+        project_id=deliverable.project_id,
+        visszajelzo_employee_id=current_user.id,
+        technikai_helyesseg=technikai_helyesseg,
+        kreativ_kepivilag=kreativ_kepivilag,
+        nyersanyag_felhasznalhatosaga=nyersanyag_felhasznalhatosaga,
+        visszajelzes_szoveg=szoveg,
+        kesz_anyag_url=deliverable.kesz_anyag_url,
+    )
+    db.add(feedback)
+
+    # Az anyagon a LEGUTÓBBI értékelés látszik (a listák ezt mutatják) - a
+    # korábbi köröket a Feedback sorok őrzik.
+    deliverable.technikai_helyesseg = technikai_helyesseg
+    deliverable.kreativ_es_kepi_vilag = kreativ_kepivilag
+    deliverable.nyersanyag_felhasznalhatosaga = nyersanyag_felhasznalhatosaga
+    deliverable.egyeb_megjegyzes = szoveg
+
+    db.commit()
+    db.refresh(feedback)
+    return feedback
+
+
+def list_comments(db: Session, deliverable_id: int) -> list[CommentRead]:
+    rows = db.scalars(
+        select(DeliverableComment)
+        .where(DeliverableComment.deliverable_id == deliverable_id)
+        .order_by(DeliverableComment.created_at)
+    ).all()
+    csatolmanyok = attachments.list_for_many(db, "deliverableComment", [c.id for c in rows])
+    return [
+        CommentRead(
+            id=c.id,
+            deliverable_id=c.deliverable_id,
+            employee_id=c.employee_id,
+            employee_name=c.employee.full_name,
+            body=c.body,
+            created_at=c.created_at,
+            updated_at=c.updated_at,
+            attachments=csatolmanyok.get(c.id, []),
+        )
+        for c in rows
+    ]
+
+
+def add_comment(db: Session, deliverable_id: int, current_user: Employee, body: str) -> CommentRead:
+    comment = DeliverableComment(deliverable_id=deliverable_id, employee_id=current_user.id, body=body)
+    db.add(comment)
+    db.commit()
+    db.refresh(comment)
+
+    deliverable = db.get(Deliverable, deliverable_id)
+    title = deliverable.projekt_neve or f"Anyag #{deliverable.id}"
+    already_notified: set[int] = set()
+
+    for employee_id in notifications.extract_mentioned_employee_ids(body, db):
+        notifications.create_notification(
+            db,
+            employee_id=employee_id,
+            kind="mention",
+            message=f"{current_user.full_name} megemlített egy hozzászólásban: {title}",
+            link=f"{UTOMUNKA_PAGE}/{deliverable.id}",
+            actor_id=current_user.id,
+        )
+        already_notified.add(employee_id)
+
+    # Minden kiosztott (több ember is lehet) + aki felvezette az anyagot.
+    kommentrol_ertesitendok = {e.id for e in deliverable.kiosztottak}
+    kommentrol_ertesitendok.update(filter(None, [deliverable.assigned_to_employee_id, deliverable.aki_felvezette_employee_id]))
+    for employee_id in sorted(kommentrol_ertesitendok):
+        if employee_id in already_notified:
+            continue
+        notifications.create_notification(
+            db,
+            employee_id=employee_id,
+            kind="comment",
+            message=f"{current_user.full_name} kommentelt: {title}",
+            link=f"{UTOMUNKA_PAGE}/{deliverable.id}",
+            actor_id=current_user.id,
+        )
+        already_notified.add(employee_id)
+
+    db.commit()
+    return CommentRead(
+        id=comment.id,
+        deliverable_id=comment.deliverable_id,
+        employee_id=comment.employee_id,
+        employee_name=current_user.full_name,
+        body=comment.body,
+        created_at=comment.created_at,
+        attachments=[],
+    )
+
+
+def edit_comment(db: Session, comment_id: int, current_user: Employee, body: str) -> CommentRead:
+    """Egy hozzászólás átírása - mindenki CSAK a sajátját szerkesztheti, küldés
+    után is (a felhasználó kérése). A szerkesztés tényét az updated_at őrzi,
+    a felület "(szerkesztve)" jelölést tesz mellé."""
+    comment = db.get(DeliverableComment, comment_id)
+    if comment is None:
+        raise HTTPException(status_code=404, detail="Nincs ilyen hozzászólás.")
+    if comment.employee_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Csak a saját hozzászólásodat szerkesztheted.")
+    newly_mentioned = notifications.extract_mentioned_employee_ids(body, db) - notifications.extract_mentioned_employee_ids(comment.body, db)
+    comment.body = body
+    for employee_id in newly_mentioned:
+        notifications.create_notification(db, employee_id=employee_id, kind="mention",
+            message=f"{current_user.full_name} megjelölt egy hozzászólásban",
+            link=f"{UTOMUNKA_PAGE}/{comment.deliverable_id}", actor_id=current_user.id)
+    db.commit()
+    db.refresh(comment)
+    csatolmanyok = attachments.list_for_many(db, "deliverableComment", [comment.id])
+    return CommentRead(
+        id=comment.id,
+        deliverable_id=comment.deliverable_id,
+        employee_id=comment.employee_id,
+        employee_name=comment.employee.full_name,
+        body=comment.body,
+        created_at=comment.created_at,
+        updated_at=comment.updated_at,
+        attachments=csatolmanyok.get(comment.id, []),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Vinyó-nevek kezelése (a felhasználó kérése): új név felvétele, átnevezés,
+# törlés - külön, adminból adható jogosultsághoz kötve (lásd
+# routes/postproduction.vinyo_kezeles_jog).
+# ---------------------------------------------------------------------------
+
+
+def _vinyo_lista_szerkesztesre(db: Session) -> tuple["DeliverableBoardConfig", list[str]]:
+    """A hivatalos vinyó-lista ÍRHATÓ alakban: ha a configban még nincs lista
+    (None), az aktuális tényleges listából (deklarált + historikus) indulunk,
+    hogy az első szerkesztés ne "tüntessen el" opciókat."""
+    from app.models.deliverable_status import DeliverableBoardConfig
+
+    config = db.query(DeliverableBoardConfig).order_by(DeliverableBoardConfig.id).first()
+    if config is None:
+        config = DeliverableBoardConfig()
+        db.add(config)
+        db.flush()
+    lista = (
+        [str(v) for v in config.vinyo_opciok]
+        if isinstance(config.vinyo_opciok, list) and config.vinyo_opciok
+        else list(get_vinyo_options(db).options)
+    )
+    return config, lista
+
+
+def add_vinyo_nev(db: Session, nev: str) -> list[str]:
+    nev = nev.strip()
+    if not nev:
+        raise HTTPException(status_code=400, detail="A vinyó neve nem lehet üres.")
+    config, lista = _vinyo_lista_szerkesztesre(db)
+    if nev in lista:
+        raise HTTPException(status_code=400, detail="Már van ilyen nevű vinyó.")
+    config.vinyo_opciok = lista + [nev]
+    db.commit()
+    return get_vinyo_options(db).options
+
+
+def _vinyo_atiras_az_anyagokon(db: Session, regi: str, uj: str | None) -> int:
+    """A vinyó-név cseréje (uj=None: levétele) MINDEN anyag vinyok listájában.
+    A JSON-oszlop módosulását kézzel kell jelezni (flag_modified), különben az
+    SQLAlchemy nem veszi észre a lista belső változását."""
+    from sqlalchemy.orm.attributes import flag_modified
+
+    erintett = 0
+    for anyag in db.scalars(select(Deliverable).where(Deliverable.vinyok.is_not(None))):
+        if not isinstance(anyag.vinyok, list) or regi not in anyag.vinyok:
+            continue
+        maradek = [v for v in anyag.vinyok if v != regi]
+        if uj is not None and uj not in maradek:
+            maradek.append(uj)
+        anyag.vinyok = maradek or None
+        flag_modified(anyag, "vinyok")
+        erintett += 1
+    return erintett
+
+
+def rename_vinyo_nev(db: Session, regi: str, uj: str) -> list[str]:
+    uj = uj.strip()
+    if not uj:
+        raise HTTPException(status_code=400, detail="A vinyó új neve nem lehet üres.")
+    config, lista = _vinyo_lista_szerkesztesre(db)
+    if regi not in lista:
+        raise HTTPException(status_code=404, detail="Nincs ilyen nevű vinyó.")
+    if uj != regi and uj in lista:
+        raise HTTPException(status_code=400, detail="Már van ilyen nevű vinyó.")
+    config.vinyo_opciok = [uj if v == regi else v for v in lista]
+    # A szín a névvel együtt költözik (a felhasználó kérése óta a vinyónak
+    # színe is lehet) - különben átnevezés után "elveszne" a színezés.
+    if isinstance(config.vinyo_szinek, dict) and regi in config.vinyo_szinek:
+        szinek = dict(config.vinyo_szinek)
+        szinek[uj] = szinek.pop(regi)
+        config.vinyo_szinek = szinek
+    _vinyo_atiras_az_anyagokon(db, regi, uj)
+    db.commit()
+    return get_vinyo_options(db).options
+
+
+def delete_vinyo_nev(db: Session, nev: str) -> list[str]:
+    config, lista = _vinyo_lista_szerkesztesre(db)
+    if nev not in lista:
+        raise HTTPException(status_code=404, detail="Nincs ilyen nevű vinyó.")
+    config.vinyo_opciok = [v for v in lista if v != nev]
+    if isinstance(config.vinyo_szinek, dict) and nev in config.vinyo_szinek:
+        szinek = dict(config.vinyo_szinek)
+        szinek.pop(nev)
+        config.vinyo_szinek = szinek
+    # Az anyagokról is lekerül - különben a "historikus érték" ágon (lásd
+    # get_vinyo_options) azonnal visszakerülne a választhatók közé.
+    _vinyo_atiras_az_anyagokon(db, nev, None)
+    db.commit()
+    return get_vinyo_options(db).options
+
+
+#: Elfogadott szín-alak: "#rrggbb" (a felület color-pickere ilyet ad).
+_SZIN_MINTA = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+
+def reorder_vinyo_nevek(db: Session, sorrend: list[str]) -> list[str]:
+    """A vinyók SORRENDJÉNEK átrendezése (a felhasználó kérése): a kapott
+    lista ugyanazokat a neveket kell tartalmazza, mint a jelenlegi - csak a
+    sorrend változhat, név nem veszhet el és nem születhet itt."""
+    config, _ = _vinyo_lista_szerkesztesre(db)
+    jelenlegi = get_vinyo_options(db).options
+    if sorted(sorrend) != sorted(jelenlegi):
+        raise HTTPException(
+            status_code=400,
+            detail="A sorrend-lista nem ugyanazokat a vinyókat tartalmazza, mint a jelenlegi - frissítsd az oldalt.",
+        )
+    config.vinyo_opciok = list(sorrend)
+    db.commit()
+    return get_vinyo_options(db).options
+
+
+def set_vinyo_szin(db: Session, nev: str, szin: str | None) -> dict[str, str]:
+    """Egy vinyó színének beállítása/levétele (szin=None)."""
+    if szin is not None and not _SZIN_MINTA.match(szin):
+        raise HTTPException(status_code=400, detail='A szín formátuma "#rrggbb" legyen.')
+    config, lista = _vinyo_lista_szerkesztesre(db)
+    letezok = set(lista) | set(get_vinyo_options(db).options)
+    if nev not in letezok:
+        raise HTTPException(status_code=404, detail="Nincs ilyen nevű vinyó.")
+    szinek = dict(config.vinyo_szinek) if isinstance(config.vinyo_szinek, dict) else {}
+    if szin is None:
+        szinek.pop(nev, None)
+    else:
+        szinek[nev] = szin
+    config.vinyo_szinek = szinek
+    db.commit()
+    return get_vinyo_options(db).szinek

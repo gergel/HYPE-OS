@@ -5,6 +5,7 @@ class FeedbackBase(BaseModel):
     deliverable_id: int
     project_id: int | None = None
     forgatta_employee_id: int | None = None
+    visszajelzo_employee_id: int | None = None
     technikai_helyesseg: float | None = None
     kreativ_kepivilag: float | None = None
     nyersanyag_felhasznalhatosaga: float | None = None

@@ -1,0 +1,132 @@
+"use client";
+
+import { useState } from "react";
+import { DataTable } from "@/components/DataTable";
+import { StatusBadge } from "@/components/StatusBadge";
+import { UtokovetesDetailModal } from "@/components/UtokovetesDetailModal";
+// CSAK típus a lib/api-ból: az érték szerinti import behúzná a `next/headers`-t
+// (a modul szerver oldalon süti-alapú hitelesítéssel hív), ami klienskomponensben
+// build-hibát okoz. A dátumformázó ezért a kliens-biztos lib/utokovetes-ből jön -
+// ugyanaz a függvény, mint amit a másik nézet (UtokovetesTabla) is használ.
+import type { UtokovetesOverview } from "@/lib/api";
+import { datum } from "@/lib/utokovetes";
+
+function szerzodesBadge(osszes: number, fuggo: number) {
+  if (osszes === 0) return <StatusBadge label="Nincs érintett fél" tone="neutral" />;
+  if (fuggo === 0) return <StatusBadge label={`Mind a ${osszes} fél kész`} tone="success" />;
+  return <StatusBadge label={`${fuggo}/${osszes} félnél hiányzik`} tone="warning" />;
+}
+
+/** A TIG-oszlop a TELJES fél-populációról beszél: a "kész" csak akkor
+ * mondható ki, ha a szerződésre váró feleknél sem hiányzik semmi - korábban
+ * ők egyik számban sem látszottak, és a címke "34/34 kész"-t írhatott olyan
+ * projektre, ahol a felek zöme még a szerződésénél tartott. */
+function tigBadge(ready: boolean, osszes: number, fuggo: number, szerzodesreVar: number) {
+  if (osszes === 0) return <StatusBadge label="Nincs érintett fél" tone="neutral" />;
+  if (fuggo === 0 && szerzodesreVar === 0)
+    return <StatusBadge label={`Mind a ${osszes} fél kész`} tone="success" />;
+  const reszek: string[] = [];
+  if (fuggo > 0) reszek.push(`${fuggo} félnél hiányzik`);
+  if (szerzodesreVar > 0) reszek.push(`${szerzodesreVar} fél szerződésre vár`);
+  return <StatusBadge label={reszek.join(" · ")} tone={fuggo > 0 ? "warning" : "neutral"} />;
+}
+
+/** A kiküldött szerződés még nem lezárt ügy: aláírva vissza is kell érkeznie.
+ * Amíg ez hiányzik, a projekt nem lehet "Kész" (lásd lib/utokovetes fazisa). */
+function alairasBadge(varo: number, szerzodesOsszes: number) {
+  if (szerzodesOsszes === 0) return <StatusBadge label="Nincs érintett" tone="neutral" />;
+  if (varo === 0) return <StatusBadge label="Megvan" tone="success" />;
+  return <StatusBadge label={`${varo} visszavárva`} tone="warning" />;
+}
+
+function kifizetesBadge(osszes: number, fuggo: number) {
+  if (osszes === 0) return <StatusBadge label="Nincs érintett" tone="neutral" />;
+  if (fuggo === 0) return <StatusBadge label={`${osszes}/${osszes} kifizetve`} tone="success" />;
+  return <StatusBadge label={`${fuggo} kifizetetlen`} tone="warning" />;
+}
+
+function visszajelzesBadge(darab: number) {
+  if (darab === 0) return <StatusBadge label="Nincs válasz" tone="neutral" />;
+  return <StatusBadge label={`${darab} válasz`} tone="success" />;
+}
+
+/** Az "admin" nézet: minden projekt egy sorban, minden fázis állapotával -
+ * szűrhető és rendezhető. Ez a részletes kép; a fázisokra bontott tábla (lásd
+ * UtokovetesTabla) az alap. */
+export function UtokovetesLista({ rows }: { rows: UtokovetesOverview[] }) {
+  // A sor felugró ablakot nyit, nem új oldalt: aki végigmegy több projekten,
+  // ne veszítse el a szűrését és a helyét a listában (lásd
+  // UtokovetesDetailModal). A getHref azért marad meg mellette, hogy a
+  // középső egérgombbal/Ctrl-lal továbbra is új fülre lehessen nyitni.
+  const [nyitottProjekt, setNyitottProjekt] = useState<number | null>(null);
+
+  return (
+    <>
+    <DataTable<UtokovetesOverview & { id: number }>
+      filterable
+      rows={rows.map((r) => ({ ...r, id: r.project_id }))}
+      emptyText="Nincs még diszpózott projekt."
+      // NEGATÍV azonosító = projektkód-szintű (forgatás nélküli) sor - arra
+      // a projektkód-részletnézet nyílik (lásd UtokovetesDetailModal).
+      getHref={(r) =>
+        r.project_id < 0 ? `/utokovetes/projektkodok/${-r.project_id}` : `/utokovetes/${r.project_id}`
+      }
+      onRowClick={setNyitottProjekt}
+      columns={[
+        { header: "Projekt", render: (r) => r.project_nev ?? `#${r.project_id}`, sortAccessor: (r) => r.project_nev },
+        { header: "Projektkód", render: (r) => r.projektkod ?? "–", sortAccessor: (r) => r.projektkod },
+        {
+          header: "Forgatás dátuma",
+          render: (r) => datum(r.forgatas_datuma),
+          sortAccessor: (r) => r.forgatas_datuma,
+        },
+        {
+          header: "Szerződések",
+          render: (r) => szerzodesBadge(r.szerzodes_osszes, r.szerzodes_fuggo),
+          sortAccessor: (r) => r.szerzodes_fuggo,
+        },
+        {
+          header: "Teljesítési igazolások",
+          render: (r) => tigBadge(r.tig_ready, r.tig_osszes, r.tig_fuggo, r.tig_szerzodesre_var),
+          sortAccessor: (r) => r.tig_fuggo + r.tig_szerzodesre_var,
+        },
+        {
+          header: "Aláírt szerződés",
+          render: (r) => alairasBadge(r.alairas_varo, r.szerzodes_osszes),
+          sortAccessor: (r) => r.alairas_varo,
+        },
+        {
+          header: "Kifizetés",
+          render: (r) => kifizetesBadge(r.kifizetes_osszes, r.kifizetes_fuggo),
+          sortAccessor: (r) => r.kifizetes_fuggo,
+        },
+        {
+          header: "Visszajelzés",
+          render: (r) => visszajelzesBadge(r.visszajelzes_darab),
+          sortAccessor: (r) => r.visszajelzes_darab,
+        },
+        {
+          // Állapot-oszlop ("Kész"/"Folyamatban") - a fejléc korábban "Kész"
+          // volt, amiből a szűrőben nem derült ki, mire lehet szűrni.
+          header: "Állapot",
+          // A "Kész" és a "nincs is papírozandó fél" nem ugyanaz - a kettő
+          // külön jelölést kap (a felhasználó kérése).
+          render: (r) =>
+            r.kesz ? (
+              r.van_papirozando ? (
+                <StatusBadge label="Kész" tone="success" />
+              ) : (
+                <StatusBadge label="Nincs teendő" tone="neutral" />
+              )
+            ) : (
+              <StatusBadge label="Folyamatban" tone="neutral" />
+            ),
+          // A kész projektek kerüljenek a lista végére rendezéskor.
+          sortAccessor: (r) => (r.kesz ? 1 : 0),
+        },
+      ]}
+    />
+      <UtokovetesDetailModal projectId={nyitottProjekt} onClose={() => setNyitottProjekt(null)} />
+    </>
+  );
+}

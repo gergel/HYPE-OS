@@ -1,0 +1,121 @@
+/* Média Portál (ügyfél-nézet, /p/[slug]) saját, prémium dizájn-rendszere - a
+   Hype-repo-main (különálló client-portál projekt) globals.css/tailwind.config.js
+   portolt LAYOUTJA (méretek, térközök, tipográfia-lépcső, animációk MIND
+   változatlanok), a SZÍNEI viszont a HYPE OS admin felület saját palettájára
+   vannak hangolva (lásd app/globals.css :root - "megmunkált alumínium és
+   fekete titán"), hogy a két felület (admin és ügyfél-portál) egy márkát
+   sugalljon, ne két különállót. Minden szín/animáció-token EGYEDI névvel (ink,
+   bone, mist, ember, tracking-eyebrow, rounded-xl2, animate-drift/fade-up),
+   ezért globálisan biztonságos hozzáadni őket a Tailwind @theme-hez anélkül,
+   hogy a HYPE OS admin felület saját design tokenjeivel (background/surface-1/
+   text-primary stb.) ütköznének.
+
+   FONTOS: a @theme blokk itt csak REGISZTRÁLJA a "ink"/"bone" stb. Tailwind
+   utility-ket (bg-ink, text-bone...) egy ideiglenes alapértékkel - a TÉNYLEGES
+   színt a .hype-portal/.hype-portal.dark osztály írja felül UGYANAZON
+   --color-* egyéni tulajdonság újra-deklarálásával (lásd lent). Egy két-lépcsős
+   "--color-ink: var(--c-ink)" indirekció NEM működne itt: a CSS egyéni
+   tulajdonságok öröklődése a DEKLARÁLÁS helyén (itt: :root) kiszámított
+   (lefagyasztott) értéket örökíti tovább, nem évaluálja újra minden leszármazott
+   elemnél - ezért ha a fallback :root szinten "transparent"-re oldódna fel,
+   az MINDEN leszármazottnál (pl. .hype-portal) transparent maradna, akkor is,
+   ha az ő saját --c-ink változóját közben átdefiniáltuk. */
+
+@theme {
+  /* Világos alap - a .hype-portal (world/nem-dark) osztály ezt használja.
+     Az admin világos nézetének (:root[data-theme="light"]) megfelelő tónusok. */
+  --color-ink: #f4f4f2;
+  --color-ink-soft: #eaeae6;
+  --color-ink-card: #ffffff;
+  --color-ink-line: #d6d6d1;
+  --color-bone: #16181c;
+  --color-mist: #55595f;
+  --color-ember: #5c5646;
+  /* Rikító jelző-szín (pl. az "Új" videó címke) - SZÁNDÉKOSAN kilóg a
+     visszafogott palettából, és mindkét (világos/sötét) témában ugyanaz:
+     az a dolga, hogy odarántsa a szemet, ezért a .hype-portal.dark nem
+     is írja felül. Az ember token erre nem jó: az a portál halk
+     bézs-szürke akcentusa (gombok, keretek, fókusz-gyűrűk), abból az "Új"
+     címke beleolvadt a felületbe. */
+  --color-flare: #f4511e;
+
+  --font-display: var(--font-portal-display), Georgia, serif;
+
+  --tracking-eyebrow: 0.32em;
+  --radius-xl2: 1.75rem;
+
+  --animate-drift: drift 24s ease-in-out infinite alternate;
+  --animate-fade-up: fade-up 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes drift {
+  0% {
+    transform: scale(1.08) translate3d(0, 0, 0);
+  }
+  100% {
+    transform: scale(1.15) translate3d(-1.5%, -1.5%, 0);
+  }
+}
+
+@keyframes fade-up {
+  0% {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* A .hype-portal wrapperen KÍVÜL a fenti @theme alapértékek (világos portál
+   színek) élnek - ez ártalmatlan, mert "bg-ink"/"text-bone" stb. sehol nem
+   használt osztálynevek a HYPE OS admin felületén. A .hype-portal.dark pedig
+   közvetlenül UGYANAZOKAT a --color-* tokeneket írja felül sötét értékekre -
+   az admin felület SAJÁT (alapértelmezett, "megmunkált alumínium és fekete
+   titán") palettájára, lásd app/globals.css :root. */
+.hype-portal.dark {
+  color-scheme: dark;
+  --color-ink: #08090b;
+  --color-ink-soft: #0c0d10;
+  --color-ink-card: #101215;
+  --color-ink-line: rgba(255, 255, 255, 0.11);
+  --color-bone: #f5f5f5;
+  --color-mist: #a3a8b3;
+  --color-ember: #d4d0c8;
+}
+
+.hype-portal {
+  color-scheme: light;
+  -webkit-font-smoothing: antialiased;
+}
+
+.hype-portal ::selection {
+  background: #5c5646;
+  color: #f4f4f2;
+}
+
+.hype-portal.dark ::selection {
+  background: #d4d0c8;
+  color: #08090b;
+}
+
+.hype-portal.grain::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 50;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hype-portal *,
+  .hype-portal *::before,
+  .hype-portal *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

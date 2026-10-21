@@ -1,0 +1,201 @@
+"""AUTÓ ÁLLAPOTFOTÓK - képfeldolgozás, mentés, napokra bontott nézet (lásd
+models/auto_allapot.py).
+
+A képek a dokumentum-tárhelyre kerülnek (services/document_storage.py),
+kitalálhatatlan névvel. Feltöltéskor a kép a helyes irányba fordul (a
+telefonok EXIF-forgatása), legfeljebb 2560 px-re kicsinyül, és bélyegkép is
+készül a listákhoz."""
+
+from __future__ import annotations
+
+import io
+import logging
+import secrets
+from collections import defaultdict
+from datetime import date, datetime, timezone
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.models.auto_allapot import OLDAL_KULCSOK, OLDALAK, AutoAllapotBekeres, AutoAllapotFoto
+from app.services import document_storage
+from app.services.hu_datum import BUDAPEST_IDOZONA
+
+logger = logging.getLogger(__name__)
+
+MAX_MERET = 25 * 1024 * 1024
+MAX_OLDAL_PX = 2560
+BELYEG_PX = 640
+
+
+class FotoHiba(ValueError):
+    pass
+
+
+#: Karosszéria-típusok (az állapotfotó-körvonalhoz) és feliratuk.
+KAROSSZERIAK = {"szemelyauto": "Személyautó", "suv": "SUV / terepjáró", "furgon": "Kisbusz / furgon"}
+
+_FURGON = (
+    "trafic", "transit", "sprinter", "vito", "transporter", "crafter", "master", "ducato", "jumper", "boxer",
+    "vivaro", "movano", "expert", "jumpy", "proace", "daily", "caddy", "kangoo", "berlingo", "partner", "combo",
+    "doblo", "multivan", "caravelle", "kisbusz", "furgon", "busz", "van",
+)
+_SUV = (
+    "bigster", "duster", "suv", "terepjáró", "terepjaro", "qashqai", "tiguan", "kodiaq", "karoq", "x-trail",
+    "sportage", "tucson", "rav4", "cr-v", "kuga", "touareg", "vitara", "jogger", "x3", "x5", "q3", "q5", "q7",
+)
+
+
+def karosszeria(auto) -> tuple[str, bool]:
+    """(karosszéria, kézzel beállított-e). Beállítás nélkül a megnevezésből /
+    típusból ismeri fel (pl. "Dacia Bigster" -> SUV, "Renault Trafic" ->
+    furgon); ha semmi nem utal rá, személyautó."""
+    import re
+
+    if getattr(auto, "karosszeria", None) in KAROSSZERIAK:
+        return auto.karosszeria, True
+    szoveg = f" {auto.megnevezes or ''} {auto.tipus or ''} ".lower()
+    szavak = set(re.findall(r"[\wáéíóöőúüű-]+", szoveg))
+    if szavak & set(_FURGON):
+        return "furgon", False
+    if szavak & set(_SUV):
+        return "suv", False
+    return "szemelyauto", False
+
+
+def uj_token() -> str:
+    return secrets.token_urlsafe(24)
+
+
+def nap(ido: datetime) -> date:
+    """A fotó napja magyar idő szerint."""
+    if ido.tzinfo is None:
+        ido = ido.replace(tzinfo=timezone.utc)
+    return ido.astimezone(BUDAPEST_IDOZONA).date()
+
+
+def kep_feldolgozas(data: bytes) -> tuple[bytes, str, bytes | None]:
+    """(eredeti JPEG-ben, content-type, bélyegkép vagy None). Ha a képet nem
+    tudjuk megnyitni (pl. ritka formátum), változatlanul tároljuk, bélyeg
+    nélkül - a fotó attól még megmarad."""
+    try:
+        from PIL import Image, ImageOps
+
+        img = Image.open(io.BytesIO(data))
+        img = ImageOps.exif_transpose(img).convert("RGB")
+        img.thumbnail((MAX_OLDAL_PX, MAX_OLDAL_PX))
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=85, optimize=True)
+        belyeg = img.copy()
+        belyeg.thumbnail((BELYEG_PX, BELYEG_PX))
+        bbuf = io.BytesIO()
+        belyeg.save(bbuf, format="JPEG", quality=75, optimize=True)
+        return buf.getvalue(), "image/jpeg", bbuf.getvalue()
+    except Exception:  # noqa: BLE001 - feldolgozás nélkül is megtartjuk a képet
+        logger.warning("Autó állapotfotó: a kép nem dolgozható fel, változatlanul mentjük.")
+        return data, "application/octet-stream", None
+
+
+def tarolas(auto_id: int, oldal: str, data: bytes) -> dict:
+    """A kép (és bélyegképe) a tárhelyre - a blokkoló rész, szálon fut."""
+    eredeti, tipus, belyeg = kep_feldolgozas(data)
+    azon = secrets.token_hex(12)
+    kulcs = f"auto-allapot/{auto_id}/{oldal}-{azon}.jpg"
+    url = document_storage.upload_bytes(eredeti, kulcs, tipus if tipus != "application/octet-stream" else "image/jpeg")
+    belyeg_kulcs = belyeg_url = None
+    if belyeg is not None:
+        belyeg_kulcs = f"auto-allapot/{auto_id}/{oldal}-{azon}-kicsi.jpg"
+        belyeg_url = document_storage.upload_bytes(belyeg, belyeg_kulcs, "image/jpeg")
+    return {"kulcs": kulcs, "url": url, "belyeg_kulcs": belyeg_kulcs, "belyeg_url": belyeg_url, "meret": len(eredeti)}
+
+
+def ellenoriz(oldal: str, data: bytes, content_type: str | None) -> None:
+    if oldal not in OLDAL_KULCSOK:
+        raise FotoHiba("Ismeretlen nézet.")
+    if not data:
+        raise FotoHiba("Üres fájl.")
+    if len(data) > MAX_MERET:
+        raise FotoHiba("A kép túl nagy (legfeljebb 25 MB).")
+    if content_type and not content_type.startswith("image/"):
+        raise FotoHiba("Csak képet lehet feltölteni.")
+
+
+def rogzites(
+    db: Session, bekeres: AutoAllapotBekeres, oldal: str, tarolt: dict, keszito: str | None, most: datetime | None = None
+) -> tuple[AutoAllapotFoto, list[str]]:
+    """Az új fotó sora. UGYANAZON a linken, ugyanabból a nézetből az aznapi
+    korábbi fotót lecseréli (az újrafotózás felülírja); más link (másik
+    fotózási kör) és a régi napok képeit nem.
+    Visszaadja az eldobott tárhely-kulcsokat is (a hívó törli őket)."""
+    most = most or datetime.now(timezone.utc)
+    eldobott: list[str] = []
+    for regi in db.scalars(
+        select(AutoAllapotFoto).where(AutoAllapotFoto.bekeres_id == bekeres.id, AutoAllapotFoto.oldal == oldal)
+    ):
+        if nap(regi.keszult_at) == nap(most):
+            eldobott += [k for k in (regi.kulcs, regi.belyeg_kulcs) if k]
+            db.delete(regi)
+    foto = AutoAllapotFoto(
+        auto_id=bekeres.auto_id, bekeres_id=bekeres.id, oldal=oldal, keszult_at=most,
+        keszito=(keszito or "").strip()[:120] or None, **tarolt,
+    )
+    db.add(foto)
+    db.flush()
+    return foto, eldobott
+
+
+def tarhely_takaritas(kulcsok: list[str]) -> None:
+    for k in kulcsok:
+        try:
+            document_storage.delete_object(k)
+        except Exception:  # noqa: BLE001 - árva fájl marad, a felületen már nem látszik
+            logger.exception("Autó állapotfotó: a régi kép törlése sikertelen: %s", k)
+
+
+def foto_kimenet(f: AutoAllapotFoto) -> dict:
+    return {
+        "id": f.id,
+        "oldal": f.oldal,
+        "keszult_at": f.keszult_at,
+        "keszito": f.keszito,
+        "url": f.url,
+        "belyeg_url": f.belyeg_url or f.url,
+    }
+
+
+def oldalak() -> list[dict]:
+    return [{"kulcs": k, "cimke": c} for k, c in OLDALAK]
+
+
+def mai_fotok(db: Session, bekeres_id: int, ma: date) -> dict[str, dict]:
+    """Ami a linken MA elkészült. Minden link külön fotózási kör: egy új link
+    üresen indul, akkor is, ha aznap egy másik linkkel már készültek képek."""
+    eredmeny: dict[str, dict] = {}
+    for f in db.scalars(
+        select(AutoAllapotFoto).where(AutoAllapotFoto.bekeres_id == bekeres_id).order_by(AutoAllapotFoto.keszult_at)
+    ):
+        if nap(f.keszult_at) == ma:
+            eredmeny[f.oldal] = foto_kimenet(f)
+    return eredmeny
+
+
+def napok(db: Session, auto_id: int) -> list[dict]:
+    """Az autó állapota NAPRÓL NAPRA (legfrissebb elöl): melyik nap melyik
+    nézetről készült kép, és mennyi van meg a hétből. Ha egy nap több link
+    (fotózási kör) is volt, mindegyik külön sor - a kezdés időpontjával."""
+    szerint: dict[tuple[date, int | None], dict[str, dict]] = defaultdict(dict)
+    kezdet: dict[tuple[date, int | None], datetime] = {}
+    for f in db.scalars(
+        select(AutoAllapotFoto).where(AutoAllapotFoto.auto_id == auto_id).order_by(AutoAllapotFoto.keszult_at)
+    ):
+        kulcs = (nap(f.keszult_at), f.bekeres_id)
+        szerint[kulcs][f.oldal] = foto_kimenet(f)
+        kezdet.setdefault(kulcs, f.keszult_at)
+    sorrend = sorted(szerint, key=lambda k: (k[0], kezdet[k]), reverse=True)
+    return [
+        {
+            "datum": k[0].isoformat(), "bekeres_id": k[1], "kezdet": kezdet[k],
+            "fotok": szerint[k], "db": len(szerint[k]), "osszes": len(OLDALAK),
+        }
+        for k in sorrend
+    ]

@@ -9,6 +9,8 @@ router = build_crud_router(
     read_schema=ClientRead,
     prefix="/clients",
     tags=["clients"],
+    page="/ugyfelek",
+    entity_type="client",
 )
 
 contacts_router = build_crud_router(
@@ -18,4 +20,5 @@ contacts_router = build_crud_router(
     read_schema=ContactRead,
     prefix="/contacts",
     tags=["clients"],
+    page="/ugyfelek",
 )

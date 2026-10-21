@@ -1,42 +1,108 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
+from app.api.routes.admin_calendar_sync import router as admin_calendar_sync_router
+from app.api.routes.admin_ellenorzes import router as admin_ellenorzes_router
+from app.api.routes.dispo_responsibles import router as dispo_responsibles_router
+from app.api.routes.diszpo_tabla import router as diszpo_tabla_router
+from app.api.routes.admin_import import router as admin_import_router
 from app.api.routes.ai_assistant import router as ai_assistant_router
+from app.api.routes.attachments import router as attachments_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.automation import router as automation_router
+from app.api.routes.autok import router as autok_router
+from app.api.routes.bejovo_szamlak import router as bejovo_szamlak_router
+from app.api.routes.utalas_felvezetes import router as utalas_felvezetes_router
+from app.api.routes.belsos_idoszakok import router as belsos_idoszakok_router
 from app.api.routes.callsheets import router as callsheets_router
 from app.api.routes.campaigns import router as campaigns_router
 from app.api.routes.clients import contacts_router, router as clients_router
 from app.api.routes.contracts import router as contracts_router
-from app.api.routes.crew import rates_router, router as crew_router
+from app.api.routes.crew import berezes_iras_vedelme, profilkep_router, rates_router, router as crew_router
 from app.api.routes.dashboard import router as dashboard_router
+from app.api.routes.gyartas import router as gyartas_router
+from app.api.routes.detail_tabs import router as detail_tabs_router
 from app.api.routes.equipment import assignments_router, router as equipment_router
-from app.api.routes.finance import expenses_router, kp_forgalom_router, revenues_router
+from app.api.routes.eseti_szerzodesek import router as eseti_szerzodesek_router
+from app.api.routes.eszkoz_kivitel import admin_router as eszkoz_kivitel_admin_router, public_router as eszkoz_kivitel_public_router
+from app.api.routes.entity_fields import router as entity_fields_router
+from app.api.routes.field_visibility import router as field_visibility_router
+from app.api.routes.finance import expenses_router, kp_forgalom_router, revenues_router, summary_router as finance_summary_router
+from app.api.routes.internal_performance_certificates import router as internal_performance_certificates_router
+from app.api.routes.kotelezettsegek import router as kotelezettsegek_router
+from app.api.routes.kulsos_tigek import router as kulsos_tigek_router
+from app.api.routes.megrendeloi_kontaktok import router as megrendeloi_kontaktok_router
+from app.api.routes.notifications import router as notifications_router
+from app.api.routes.performance_certificates import router as performance_certificates_router
 from app.api.routes.portal import payments_router, router as portal_router
-from app.api.routes.postproduction import deliverables_router, feedback_router, timesheets_router
+from app.api.routes.anyagbekeres_admin import router as anyagbekeres_admin_router
+from app.api.routes.anyagbekeres_public import router as anyagbekeres_public_router
+from app.api.routes.auto_allapot import public_router as auto_allapot_public_router, router as auto_allapot_router
+from app.api.routes.portal_admin import router as portal_admin_router
+from app.api.routes.portal_public import downloads_router as portal_downloads_router, router as portal_public_router
+from app.api.routes.postproduction import deliverable_actions_router, deliverables_router, feedback_router, timesheets_router
 from app.api.routes.project_codes import router as project_codes_router
+from app.api.routes.project_codes import valaszthato_router as project_codes_valaszthato_router
+from app.api.routes.project_szamlazok import router as projekt_szamlazok_router
 from app.api.routes.projects import router as projects_router
+from app.api.routes.public_utokovetes import router as public_utokovetes_router
+from app.api.routes.realtime import router as realtime_router
+from app.api.routes.search import router as search_router
+from app.api.routes.stocktake import router as stocktake_router
 from app.api.routes.storage import folders_router, media_router
+from app.api.routes.subcontractor_contracts import router as subcontractor_contracts_router
 from app.api.routes.tasks import router as tasks_router
+from app.api.routes.arajanlatok import router as arajanlatok_router, tetel_router as arajanlat_tetel_router
+from app.api.routes.quotes import router as quotes_router
+from app.api.routes.hype_todo import router as hype_todo_router
+from app.api.routes.flora import router as flora_router
+from app.api.routes.munkafelajanlas import public_router as munkafelajanlas_public_router, router as munkafelajanlas_router
+from app.api.routes.agi_todo import router as agi_todo_router
 from app.api.routes.timeline import router as timeline_router
+from app.api.routes.user_access import router as user_access_router
+from app.api.routes.vagoi_visszajelzesek import router as vagoi_visszajelzesek_router
+from app.api.routes.utokovetes_admin import router as utokovetes_admin_router
+from app.api.routes.utokovetes_hianyok import router as utokovetes_hianyok_router
+from app.api.routes.krumpello import router as krumpello_router
+from app.api.routes.megrendeloi_keretszerzodesek import router as megrendeloi_keretszerzodesek_router
+from app.api.routes.megrendeloi_papirok import router as megrendeloi_papirok_router
+from app.api.routes.vagoi_jatek import router as vagoi_jatek_router
+from app.api.routes.vallalkozasok import router as vallalkozasok_router
+from app.api.routes.visszavonas import router as visszavonas_router
 
 api_router = APIRouter()
+
+#: A PAPÍROZÁSI routerek író kérései a tevékenységnaplóba kerülnek (ki, mikor,
+#: mit) - az Adminisztráció ellenőrzése oldalhoz (lásd
+#: services/tevekenyseg_naplo.py).
+from app.services.tevekenyseg_naplo import naplo_fuggoseg  # noqa: E402
+
+_NAPLOZOTT = [Depends(naplo_fuggoseg)]
 
 # 1. Auth
 api_router.include_router(auth_router)
 # 2. Dashboard
 api_router.include_router(dashboard_router)
+api_router.include_router(gyartas_router)
+api_router.include_router(diszpo_tabla_router)
 # 3. Ügyfelek
 api_router.include_router(clients_router)
 api_router.include_router(contacts_router)
 # 4-5. Project Codes / Projects
+# ELŐBB a "/valaszthato", különben a CRUD-generátor "/{item_id}" mintája
+# nyelné el az útvonalat (lásd routes/project_codes.py).
+api_router.include_router(project_codes_valaszthato_router)
 api_router.include_router(project_codes_router)
 api_router.include_router(projects_router)
+api_router.include_router(projekt_szamlazok_router)
 # 6. Crew (Employee + Rate)
 api_router.include_router(crew_router)
-api_router.include_router(rates_router)
+api_router.include_router(profilkep_router)
+# A bérezés írása csak Pénzügy-joggal (lásd crew.berezes_iras_vedelme).
+api_router.include_router(rates_router, dependencies=[Depends(berezes_iras_vedelme)])
 # 7. Equipment
 api_router.include_router(equipment_router)
 api_router.include_router(assignments_router)
+api_router.include_router(stocktake_router)
 # 8. Timeline
 api_router.include_router(timeline_router)
 # 9. Storage
@@ -44,23 +110,95 @@ api_router.include_router(folders_router)
 api_router.include_router(media_router)
 # 10. Naptár / Diszpó
 api_router.include_router(callsheets_router)
+api_router.include_router(public_utokovetes_router)
+api_router.include_router(eszkoz_kivitel_public_router)
+api_router.include_router(eszkoz_kivitel_admin_router)
 # 11. Utómunka
+api_router.include_router(deliverable_actions_router)
 api_router.include_router(deliverables_router)
 api_router.include_router(timesheets_router)
 api_router.include_router(feedback_router)
+# Vágói visszajelzések: a gyűjtő nézet és a diszpóra kiküldés.
+api_router.include_router(vagoi_visszajelzesek_router)
 # 12. Portál / Fizetés
 api_router.include_router(portal_router)
 api_router.include_router(payments_router)
+api_router.include_router(portal_admin_router)
+api_router.include_router(anyagbekeres_admin_router)
+api_router.include_router(anyagbekeres_public_router)
+api_router.include_router(auto_allapot_router)
+api_router.include_router(auto_allapot_public_router)
+api_router.include_router(portal_public_router)
+api_router.include_router(portal_downloads_router)
 # 13. Pénzügyek
-api_router.include_router(expenses_router)
-api_router.include_router(revenues_router)
-api_router.include_router(kp_forgalom_router)
-api_router.include_router(contracts_router)
+api_router.include_router(expenses_router, dependencies=_NAPLOZOTT)
+api_router.include_router(revenues_router, dependencies=_NAPLOZOTT)
+api_router.include_router(kp_forgalom_router, dependencies=_NAPLOZOTT)
+api_router.include_router(finance_summary_router)
+api_router.include_router(contracts_router, dependencies=_NAPLOZOTT)
+api_router.include_router(subcontractor_contracts_router, dependencies=_NAPLOZOTT)
+api_router.include_router(eseti_szerzodesek_router, dependencies=_NAPLOZOTT)
+api_router.include_router(krumpello_router)
+api_router.include_router(megrendeloi_keretszerzodesek_router, dependencies=_NAPLOZOTT)
+api_router.include_router(megrendeloi_papirok_router, dependencies=_NAPLOZOTT)
+api_router.include_router(vagoi_jatek_router)
+api_router.include_router(vallalkozasok_router)
+api_router.include_router(visszavonas_router)
+api_router.include_router(bejovo_szamlak_router, dependencies=_NAPLOZOTT)
+api_router.include_router(utalas_felvezetes_router, dependencies=_NAPLOZOTT)
+api_router.include_router(belsos_idoszakok_router)
+# Visszatérő kötelezettségek (E-Rezsi, biztosítások) és a céges autók - a
+# kettő ugyanazt a lejárat-figyelést használja (lásd services/kotelezettseg.py).
+api_router.include_router(kotelezettsegek_router)
+api_router.include_router(autok_router)
+# A megrendelői kontaktok önálló listája (az adat maga a /contacts CRUD-é).
+api_router.include_router(megrendeloi_kontaktok_router)
+api_router.include_router(performance_certificates_router, dependencies=_NAPLOZOTT)
+# Az összes külsős TIG egy listában (a kihagyottakkal együtt).
+api_router.include_router(kulsos_tigek_router, dependencies=_NAPLOZOTT)
+api_router.include_router(internal_performance_certificates_router, dependencies=_NAPLOZOTT)
+# A /utokovetes/hianyok ELŐBB kell, mint a /utokovetes/{project_id}.
+api_router.include_router(utokovetes_hianyok_router, dependencies=_NAPLOZOTT)
+api_router.include_router(utokovetes_admin_router)
+# Adminisztráció ellenőrzése (csak a tulajdonosnak) - napló, kivételek, Lara figyelése.
+api_router.include_router(admin_ellenorzes_router)
 # 14. Kampányok
 api_router.include_router(campaigns_router)
 # Feladatok
 api_router.include_router(tasks_router)
+api_router.include_router(arajanlatok_router)
+api_router.include_router(arajanlat_tetel_router)
+api_router.include_router(quotes_router)
+api_router.include_router(hype_todo_router)
+api_router.include_router(flora_router)
+api_router.include_router(munkafelajanlas_router)
+api_router.include_router(munkafelajanlas_public_router)
+api_router.include_router(agi_todo_router)
 # Automation
 api_router.include_router(automation_router)
 # AI Assistant
 api_router.include_router(ai_assistant_router)
+# Beállítások: mező-láthatóság + oldal-hozzáférés (egyénenként) + admin fül-elrendezés
+api_router.include_router(entity_fields_router)
+api_router.include_router(field_visibility_router)
+api_router.include_router(user_access_router)
+api_router.include_router(detail_tabs_router)
+# Fájl-csatolmányok (szerződés/TIG/számla) bármelyik rekordhoz - R2 tárhelyen
+api_router.include_router(attachments_router)
+# Értesítések
+api_router.include_router(notifications_router)
+# Admin: Notion import a böngészőből (railway ssh nélkül)
+api_router.include_router(admin_import_router)
+# Admin: HYPE CALENDAR naptár-szinkron kézi indítása/állapota
+api_router.include_router(admin_calendar_sync_router)
+api_router.include_router(dispo_responsibles_router)
+# Globális kereső (TopBar "Keresés bármiben…")
+api_router.include_router(realtime_router)
+api_router.include_router(search_router)
+from app.api.routes.portal_exports import router as portal_exports_router
+api_router.include_router(portal_exports_router)
+from app.api.routes.admin_agent import router as admin_agent_router
+api_router.include_router(admin_agent_router)
+from app.api.routes.lara_beszelgetes import router as lara_beszelgetes_router  # noqa: E402
+
+api_router.include_router(lara_beszelgetes_router)

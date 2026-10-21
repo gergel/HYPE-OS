@@ -1,14 +1,23 @@
-from datetime import date
+from datetime import date, datetime
 
 from pydantic import BaseModel
+
+JsonScalar = dict | list | float | str | bool | None
 
 
 class DeliverableBase(BaseModel):
     projekt_neve: str
     project_code_id: int | None = None
+    #: A projektkód SZÖVEGE - létrehozáskor kötelező (lásd
+    #: routes/postproduction._vagas_projektkodja). Azért itt is szerepel, hogy a
+    #: létrehozó séma átengedje: enélkül a kód némán elveszne, és minden vágás
+    #: "kód nélkülinek" látszana.
+    projektkod_szoveg: str | None = None
     project_id: int | None = None
     vago_employee_id: int | None = None
     campaign_id: int | None = None
+    aki_felvezette_employee_id: int | None = None
+    assigned_to_employee_id: int | None = None
     allapot: str | None = None
     hatarido: date | None = None
     koltseg: float | None = None
@@ -18,17 +27,116 @@ class DeliverableBase(BaseModel):
 
 
 class DeliverableCreate(DeliverableBase):
-    pass
+    #: Az Utómunka oldali felvezetésnél NEM a nevet kérjük be, hanem az
+    #: esemény nevét és a forgatás dátumát - a név ezekből és a projektkódból
+    #: áll össze (<esemény>_<ÉÉÉÉ.HH.NN>_<kód HYPE nélkül>, lásd
+    #: routes/postproduction._vagas_projektkodja). Aki kész nevet küld (pl. az
+    #: AI Assistant), annál az marad.
+    projekt_neve: str | None = None
+    esemeny_neve: str | None = None
+    #: Csak bemenet: a névbe kerül, és szövegként a "Forgatás dátuma" mezőbe.
+    forgatas_datuma: date | None = None
+    #: A vágási leírás már FELVEZETÉSKOR is megadható (a felhasználó
+    #: hibajelzése: az AI Assistant hiába küldte, a séma némán eldobta).
+    vagas_leiras: str | None = None
+    #: Kényelmi álnév ugyanarra: a "leírás" szóból a hívók (főleg az AI
+    #: Assistant) természetesen a `leiras` kulcsot képezik - a
+    #: before_create hook teszi át a vagas_leiras mezőbe (lásd
+    #: routes/postproduction._vagas_projektkodja).
+    leiras: str | None = None
+
+
+class DeliverableListItem(BaseModel):
+    """A lista nézet (GET /api/v1/deliverables) szűkített sémája - a Deliverable
+    ~60 oszlopos teljes DeliverableRead helyett, mert az Utómunka oldal
+    (Kanban tábla + admin lista) és a kapcsolódó RelatedTable-ök (pl. egy
+    Projekt vagy Crew tag deliverable-jei) ténylegesen csak ezt a néhány
+    mezőt jelenítik meg (lásd frontend/app/utomunka/page.tsx és
+    RelatedTable.tsx) - ugyanaz a minta, mint a Project ProjectListItem-je."""
+
+    id: int
+    projekt_neve: str
+    allapot: str | None = None
+    hatarido: date | None = None
+    assigned_to_employee_id: int | None = None
+    #: Kikre van kiosztva (több ember is lehet) - a modell property-jeiből
+    #: töltődik (lásd models/deliverable.py); a lista végpont selectinload-dal
+    #: hozza be, hogy ne legyen soronkénti lekérdezés.
+    kiosztott_employee_ids: list[int] = []
+    kiosztott_nevek: list[str] = []
+    vinyok: JsonScalar = None
+    anyag_kikuldve: bool = False
+    vagas_leallitva: datetime | None = None
+    #: A vinyó-nézet keresőjéhez (projektkódra/eseményre is lehessen keresni).
+    projektkod_szoveg: str | None = None
+    esemeny_neve: str | None = None
+    #: A vinyó-nézet kártya-címkéjéhez (ott az archiválás állapota kell, nem
+    #: a vágás-állapot - a felhasználó kérése).
+    archivalas: str | None = None
+    #: PRIORITÁS: a kiemelt anyag kártyája piros körvonalat kap a táblán,
+    #: amíg kész/kiküldhető állapotba nem kerül (a felhasználó kérése).
+    prioritas: bool = False
+
+    model_config = {"from_attributes": True}
 
 
 class DeliverableUpdate(BaseModel):
     allapot: str | None = None
     vago_employee_id: int | None = None
+    assigned_to_employee_id: int | None = None
     kesz_anyag_url: str | None = None
     anyag_kikuldve: bool | None = None
 
 
 class DeliverableRead(DeliverableBase):
     id: int
+    #: Kikre van kiosztva (több ember is lehet) - lásd DeliverableListItem.
+    kiosztott_employee_ids: list[int] = []
+    kiosztott_nevek: list[str] = []
+    # Ha van hozzá tartozó Média Portál (lásd routes/portal_admin.py
+    # create_portal_from_deliverable), a frontend ez alapján dönti el, hogy
+    # "Portál létrehozása" gombot vagy a meglévő Portálra mutató linket mutassa.
+    portal_id: int | None = None
+    #: PRIORITÁS - lásd DeliverableListItem.prioritas.
+    prioritas: bool = False
+
+    # az 'Utómunka' Notion tábla maradék mezői, egyenként (lásd scripts/dump_extra_keys.py)
+    tobb_vinyo: bool | None = None
+    timesheet_status: str | None = None
+    stop_timer: bool | None = None
+    completed_notion: bool | None = None
+    time_minutes: float | None = None
+    jovairva: bool | None = None
+    total_time: str | None = None
+    anyag_zapierbe: bool | None = None
+    updated_at_notion: datetime | None = None
+    vinyok: JsonScalar = None
+    projektkod_szoveg: str | None = None
+    completed_time: date | None = None
+    vagas_leiras: str | None = None
+    aki_felvezette_az_utomunkat_notion_ids: JsonScalar = None
+    jovairando_pont: float | None = None
+    timesheet_public_notion_ids: JsonScalar = None
+    timesheet_private_notion_ids: JsonScalar = None
+    vagas_leallitva: datetime | None = None
+    forgatas_datuma_notion: str | None = None
+    esemeny_neve: str | None = None
+    aki_ellenorzesbe_tette_notion_ids: JsonScalar = None
+    megrendeloi_email_cimek: str | None = None
+    email_megnevezes: str | None = None
+    megrendeloi_kontaktok_notion_ids: JsonScalar = None
+    archivalas: str | None = None
+    label: str | None = None
+    assigned_to_notion: JsonScalar = None
+    visszajelzessek_notion_ids: JsonScalar = None
+    files_vagashoz_urls: JsonScalar = None
+    esedekes: str | None = None
+    email_forgatas_datum: str | None = None
+    xp: str | None = None
+    pontozas: float | None = None
+    egyeb_megjegyzes: str | None = None
+    nyersanyag_felhasznalhatosaga: float | None = None
+    technikai_helyesseg: float | None = None
+    kreativ_es_kepi_vilag: float | None = None
 
     model_config = {"from_attributes": True}

@@ -1,21 +1,74 @@
 from datetime import date
+from typing import Any
 
-from sqlalchemy import Date, ForeignKey, Numeric, String
+from sqlalchemy import JSON, Boolean, Date, ForeignKey, Numeric, String, Text, false, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 from app.models.base import TimestampMixin
+# Az elszámolás közös szabálya (nettó a mérvadó). Behúzható modul szinten is:
+# csak az SQLAlchemy-től függ, tehát nem csinál körbe-importot a modellekkel -
+# a kulsos_koltseg / belsos_koltseg viszont igen, azok ezért maradnak lentebb,
+# a metódusokon belüli importban.
+from app.services import elszamolas
+from app.services.hu_szoveg import ekezet_nelkul
+
+#: Az esemény állapota, ami azt jelenti: EZ NEM TÖRTÉNT MEG.
+#:
+#: A szöveg a Notionből jön (szabad select-érték), ezért ékezet- és
+#: kisbetű-tűrően, előtag szerint nézzük: "Elmaradt", "elmarad",
+#: "Elmaradt (ügyfél lemondta)" mind ugyanaz.
+ELMARADT_ELOTAG = "elmarad"
+
+#: A Notionból örökölt "Számla státusza" értékei, amik azt jelentik: A
+#: MEGRENDELŐ MÁR KIFIZETETT MINKET. A kis/nagybetűtől és a pontos
+#: megfogalmazástól függetlenül a "kifizet" szórészlet dönt, hogy egy
+#: átfogalmazott állapotnév ("Kifizetve", "Kifizettük, számla feltöltve") ne
+#: csendben ejtse ki a sort a listából. Lásd `bevetel_kifizetve` - és
+#: routes/finance.py "Utalásra váró számlák" listája, ami ugyanezt a jelet
+#: használja (onnan lett ide átemelve, hogy egy helyen éljen).
+KIFIZETETT_STATUSZ_MINTA = "kifizet"
+
+
+def esemeny_elmaradt(esemeny_allapota: str | None) -> bool:
+    """Elmaradt-e az esemény? Ha igen, semmilyen papírt nem kérünk hozzá.
+
+    Ez nem ugyanaz, mint a `papir_nelkul`: ott MEGTÖRTÉNT a teljesítés, csak
+    máshogy számolódik el. Itt nem történt meg - se szerződést, se TIG-et, se
+    számlát nincs mire alapozni, és egy elmaradt forgatás nem maradhat örökre a
+    teendők között."""
+    if not esemeny_allapota:
+        return False
+    return ekezet_nelkul(esemeny_allapota).startswith(ELMARADT_ELOTAG)
 
 
 class ProjectCode(TimestampMixin, Base):
-    """Pénzügyi egység - 1 Project Code : N Project (forgatás). A pénzügyi mag."""
+    """Pénzügyi egység - 1 Project Code : N Project (forgatás). A pénzügyi mag.
+
+    A 'HYPE ADMIN projektkódok' Notion tábla 81 mezős - a felhasználó döntése alapján
+    (2026-07-02) minden mező saját, névvel ellátott oszlopot kap (nem egy közös JSON
+    "extra" mezőbe zsúfolva). Kivétel: a puszta Notion buttonök (sosem hordoznak
+    adatot), és azok a relationök, amik már úgyis megvannak a mi valódi, fordított
+    irányú FK-jainkkal (pl. 'Utómunka'/'Bevételek'/'Forgatások'/'Projekt kiadások'/
+    'Belsős extra kiadások' relationök - ezek ugyanazt az adatot duplikálnák, amit a
+    Deliverable/Revenue/Project/Expense.project_code_id már helyesen hordoz).
+
+    Sok Notion mező (formula/rollup) egy régi, Notion-oldali számítás pillanatképe -
+    ahol van megbízható saját számításunk (pl. összes költség, profit), azt az
+    `osszes_koltseg`/`becsult_profit` @property adja élőben, a Notion pillanatkép a
+    `*_notion` nevű oszlopokban van, tájékoztató jelleggel."""
 
     __tablename__ = "project_codes"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     projektkod: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
 
-    client_id: Mapped[int] = mapped_column(ForeignKey("clients.id"), nullable=False)
+    #: A megrendelő. SZÁNDÉKOSAN opcionális: egy projektkód gyakran korábban
+    #: születik meg (a következő szabad sorszámot lefoglaljuk), mint ahogy
+    #: eldőlne, kinek dolgozunk rajta - a felvételkor ezért nem kérjük.
+    #: Ami rá épül, kezeli a hiányát (lásd services/megrendeloi_papir.py:
+    #: ügyfél nélkül nincs keretszerződés-fedés, tehát eseti szerződés kell).
+    client_id: Mapped[int | None] = mapped_column(ForeignKey("clients.id"))
     contract_id: Mapped[int | None] = mapped_column(ForeignKey("contracts.id"))
 
     datum: Mapped[date | None] = mapped_column(Date)
@@ -26,19 +79,764 @@ class ProjectCode(TimestampMixin, Base):
     tig_statusza: Mapped[str | None] = mapped_column(String(50))
     szamla_statusza: Mapped[str | None] = mapped_column(String(50))
 
+    megjegyzes: Mapped[str | None] = mapped_column(Text)
+
+    #: Van-e szerződés emögött a projekt mögött.
+    #:
+    #: Ez a kapcsoló dönti el, hogy kérünk-e papírt: ha VAN szerződés, akkor a
+    #: megrendelői eseti szerződés ÉS a teljesítési igazolás is jár hozzá
+    #: (lásd models/megrendeloi_papir.py). Ha nincs, a projektkód
+    #: papírozás-szempontból lezártnak számít.
+    #:
+    #: Alapértéke True: a szokásos eset az, hogy szerződünk - a kivételt kell
+    #: külön jelölni, nem a szabályt.
+    van_szerzodes: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=text("true")
+    )
+
+    #: Papír nélkül elszámolt projekt.
+    #:
+    #: Van olyan eset, amikor nem kell se szerződés, se TIG, mert a
+    #: teljesítés nem klasszikus megrendelés: pl. a cégvezető be van jelentve
+    #: a megrendelő céghez vállalkozóként, és a projekt ellenértéke úgy
+    #: rendeződik, hogy ő ANNYIVAL KEVESEBB fizetést vesz fel onnan.
+    #:
+    #: Ilyenkor a bevétel NEM bejövő pénz, hanem el nem költött pénz - a
+    #: pénzmozgás elmarad, a teljesítés viszont megtörtént. Ezért a projektkód
+    #: nem "hiányos papírozású", hanem külön, megindokolt kategória: enélkül
+    #: minden ilyen tétel örökre ott állna a teendők között.
+    papir_nelkul: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    #: MIÉRT nincs papír. A jelöléshez kötelező (lásd routes/project_codes.py):
+    #: fél év múlva ez az egyetlen dolog, amiből kiderül, mi történt.
+    papir_nelkul_indoka: Mapped[str | None] = mapped_column(Text)
+
+    #: "Kifizetve, de NE kerüljön a bevételek közé."
+    #:
+    #: A számla-lépés lezárásakor alapból bevétel-sor keletkezik (az a pénz
+    #: tényleg megjött). Van viszont olyan eset, amikor a munka ki van
+    #: fizetve, de a Pénzügyekbe nem való: beszámították valamibe, egy másik
+    #: cégen át folyt be, vagy már máshol el van könyvelve. Ilyenkor a
+    #: projektkód mégis LEZÁRT (nem áll örökre a teendők között), csak nincs
+    #: mögötte bevétel-sor - és ide van írva, miért.
+    bevetelbe_ne_keruljon: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    #: MIÉRT nem kerül a bevételek közé - a jelöléshez kötelező.
+    bevetel_kihagyas_oka: Mapped[str | None] = mapped_column(Text)
+
+    #: "Erről a munkáról nincs számla."
+    #:
+    #: Van, amit nem a megszokott módon fizetnek: nincs kiállított számla,
+    #: tehát fizetési határidő sincs - a pénz viszont megjött (vagy másképp
+    #: rendeződött). A számla-lépés ilyenkor is lezárható, csak a határidőt
+    #: nem kérjük számon (lásd services/megrendeloi_szamla.py).
+    szamla_kihagyva: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    #: MIÉRT nincs számla - a jelöléshez kötelező.
+    szamla_kihagyas_oka: Mapped[str | None] = mapped_column(Text)
+
+    #: LEZÁRVA, de nem volt tranzakció - ezért nincs kifizetési dátuma.
+    #:
+    #: Ahol nincs számla (`szamla_kihagyva`), nincs papír (`papir_nelkul`) vagy
+    #: elmaradt az esemény, ott a legtöbbször pénzmozgás sem történik: a munka
+    #: beszámítódik valamibe, kompenzálódik, vagy egyszerűen nincs miért
+    #: fizetni. Ilyenkor a "mikor érkezett meg a pénz" kérdésre nincs igaz
+    #: válasz - egy beírt dátum nem hiányzó adat pótlása lenne, hanem egy
+    #: kitalált tranzakció.
+    #:
+    #: A projektkód ettől még LEZÁRT: a rendezés ténye a jelölés, nem egy
+    #: dátum (lásd bevetel_kifizetve). Hogy MIÉRT nem volt tranzakció, az a
+    #: `szamla_kihagyas_oka` / `papir_nelkul_indoka` mezőben áll - azokat a
+    #: jelöléshez amúgy is kötelező kitölteni.
+    tranzakcio_nelkul_lezarva: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+
+    #: MIÉRT ennyi a vállalási ár - szabad szöveg a "Mennyiért vállaltuk"
+    #: kártyához.
+    #:
+    #: Nem minden összeg magyarázza magát, és a 0 Ft a legkevésbé: lehet, hogy
+    #: nem ingyen dolgoztunk, hanem beszámítottuk valakinek a fizetésébe, egy
+    #: korábbi munkát kompenzáltunk vele, vagy csere volt. Enélkül fél év múlva
+    #: csak egy nulla áll ott, és senki nem tudja, elfelejtették-e beírni vagy
+    #: tényleg így volt - a profit pedig ugyanezt a nullát viszi tovább.
+    #:
+    #: Külön mező, nem a `megjegyzes`: az a projektkód általános jegyzete, ez
+    #: pedig konkrétan az ÁRRÓL szól, és ott is jelenik meg, ahol az ár.
+    vallalasi_ar_magyarazat: Mapped[str | None] = mapped_column(
+        Text, comment="Miért ennyi a vállalási ár (pl. beszámítva egy fizetésbe)"
+    )
+
+    teljesites_datuma: Mapped[date | None] = mapped_column(Date)
+    utalas_datuma: Mapped[date | None] = mapped_column(Date)
+    szamla_url: Mapped[str | None] = mapped_column(String(500))
+    tig_alairva_url: Mapped[str | None] = mapped_column(String(500))
+
+    # --- a maradék Notion mezők, egyenként ("Notion property" a kommentben) ---
+    teljesites_datum_formazva: Mapped[str | None] = mapped_column(String(255), comment="Teljesítés dátum formáz")
+    netto_osszeg: Mapped[float | None] = mapped_column(Numeric(14, 2), comment="Nettó összeg")
+    megrendelo_szekhelye: Mapped[str | None] = mapped_column(String(500), comment="Megrendelő  székhelye")
+    profit_szazalek_notion: Mapped[dict | None] = mapped_column(JSON, comment="Profit százalék")
+    geri_projekt: Mapped[str | None] = mapped_column(String(100), comment="Geri projekt")
+    szerzodes_targya: Mapped[str | None] = mapped_column(String(255), comment="Szerződés tárgya")
+    keltezes_datum_formazva: Mapped[str | None] = mapped_column(String(255), comment="Keltezés dátum formáz")
+    gyartasi_koltseg_notion: Mapped[dict | None] = mapped_column(JSON, comment="Gyártási költség")
+    szerzodes_specialis_eset: Mapped[str | None] = mapped_column(Text, comment="Szerződés speciális eset")
+    fizetesi_hatarido: Mapped[date | None] = mapped_column(Date, comment="Fizetési határidő")
+    megrendelo_nyilvantartasi_szam: Mapped[str | None] = mapped_column(
+        String(100), comment="Megrendelő nyilvántartásiszám"
+    )
+    szerzodes_kuldes: Mapped[bool] = mapped_column(
+        Boolean, server_default=false(), default=False, comment="Szerződés küldés"
+    )
+    osszes_koltseg_notion: Mapped[dict | None] = mapped_column(
+        JSON, comment="Összes költség (Notion pillanatkép - élő érték: @property osszes_koltseg)"
+    )
+    tig_teljesitesi_ido: Mapped[str | None] = mapped_column(String(255), comment="TIG teljesítési idő")
+    megrendelo_neve: Mapped[str | None] = mapped_column(String(255), comment="Megrendelő neve")
+    osszesen_netto_notion: Mapped[dict | None] = mapped_column(JSON, comment="Összesen nettó")
+    megrendelo_adoszama: Mapped[str | None] = mapped_column(String(50), comment="Megrendelő adószáma")
+    netto_notion: Mapped[dict | None] = mapped_column(JSON, comment="Nettó")
+    helyszin: Mapped[str | None] = mapped_column(String(255), comment="HELYSZÍN")
+    datum_megjegyzes: Mapped[str | None] = mapped_column(Text, comment="DÁTUM megjegyzés")
+    szerzodes_plusz_afa: Mapped[str | None] = mapped_column(String(100), comment="Szerződés plus ÁFA")
+    tig_projektnev: Mapped[str | None] = mapped_column(String(255), comment="TIG projektnév")
+    specialis_eset: Mapped[str | None] = mapped_column(Text, comment="Speciális eset")
+    szerzodes_helye: Mapped[str | None] = mapped_column(String(100), comment="Szerződés helye")
+    szerzodes_netto_osszeg: Mapped[float | None] = mapped_column(Numeric(14, 2), comment="Szerződés nettó összeg")
+    megrendeloi_emailek: Mapped[str | None] = mapped_column(Text, comment="megrendelői emailek")
+    brutto_notion: Mapped[dict | None] = mapped_column(JSON, comment="Bruttó")
+    kulsos_notion_ids: Mapped[dict | None] = mapped_column(JSON, comment="Külsős (relation, nyers Notion page ID-k)")
+    alvallalkozok_koltsege_notion: Mapped[dict | None] = mapped_column(JSON, comment="Alvállalkozók költsége")
+    darabolva: Mapped[dict | None] = mapped_column(JSON, comment="Darabolva")
+    vagasi_koltseg_notion: Mapped[dict | None] = mapped_column(JSON, comment="Vágási költség")
+    project_nev: Mapped[str | None] = mapped_column(String(255), comment="PROJECT NÉV")
+    szerzodes_statusza: Mapped[str | None] = mapped_column(String(50), comment="Szerződés státusza")
+    plusz_afa: Mapped[str | None] = mapped_column(String(100), comment="Plusz ÁFA")
+    megerte_e: Mapped[dict | None] = mapped_column(JSON, comment="Megérte-e")
+    megrendelo_kepviseloje: Mapped[str | None] = mapped_column(String(255), comment="Megrendelő képviselője")
+    szerzodes_projekt_nev: Mapped[str | None] = mapped_column(String(255), comment="Szerződés projekt név")
+    teljesites: Mapped[str | None] = mapped_column(Text, comment="Teljesítés")
+    tig_kikuldve: Mapped[bool] = mapped_column(
+        Boolean, server_default=false(), default=False, comment="TIG kiküldve"
+    )
+    adminisztracios_tablaban: Mapped[str | None] = mapped_column(String(100), comment="ADMINISZTRÁCIÓS TÁBLÁBAN?")
+    tig_specialis: Mapped[str | None] = mapped_column(Text, comment="TIG Speciális")
+    keltezes_datuma: Mapped[date | None] = mapped_column(Date, comment="Keltezés dátuma")
+    lejart_notion: Mapped[dict | None] = mapped_column(JSON, comment="Lejárt")
+    megbizas_targya: Mapped[str | None] = mapped_column(String(255), comment="Megbízás tárgya")
+    belsos_koltseg_akkor: Mapped[float | None] = mapped_column(Numeric(14, 2), comment="Belsős költség akkor")
+    vallalasi_ar_notion: Mapped[dict | None] = mapped_column(JSON, comment="Vállalási ár")
+    tovabbi_dokumentumok: Mapped[dict | None] = mapped_column(JSON, comment="További dokumentumok (files)")
+    utomunkak_notion: Mapped[dict | None] = mapped_column(JSON, comment="Utómunkák (formula szöveg)")
+    bevetel_formaja: Mapped[str | None] = mapped_column(String(100), comment="Bevétel formája")
+    darabolas_notion_ids: Mapped[dict | None] = mapped_column(
+        JSON, comment="HYPE ADMIN PROJEKTKÓDOK DARABOLÁS (relation, nyers Notion page ID-k)"
+    )
+    megrendelo_email: Mapped[str | None] = mapped_column(String(255), comment="Megrendelő email")
+    forintban_notion: Mapped[dict | None] = mapped_column(JSON, comment="Forintban")
+    szerzodes_keltezes_datuma: Mapped[date | None] = mapped_column(Date, comment="Szerződés keltezés dátuma")
+    belsos_koltseg_notion: Mapped[dict | None] = mapped_column(JSON, comment="Belsős költség")
+    belso_plusz_koltseg_notion: Mapped[dict | None] = mapped_column(JSON, comment="Belső plusz költség")
+    tig_url: Mapped[str | None] = mapped_column(String(500), comment="TIG url")
+
     client: Mapped["Client"] = relationship(back_populates="project_codes")
-    contract: Mapped["Contract"] = relationship(back_populates="project_codes")
+    contract: Mapped["Contract"] = relationship(back_populates="project_codes", foreign_keys=[contract_id])
     projects: Mapped[list["Project"]] = relationship(back_populates="project_code")
     expenses: Mapped[list["Expense"]] = relationship(back_populates="project_code")
     revenues: Mapped[list["Revenue"]] = relationship(back_populates="project_code")
     deliverables: Mapped[list["Deliverable"]] = relationship(back_populates="project_code")
+    #: Hozzászólások - ugyanaz a chat-szerű minta, mint az Utómunkánál (lásd
+    #: models/deliverable_comment.py). A projektkóddal együtt törlődnek.
+    comments: Mapped[list["ProjectCodeComment"]] = relationship(
+        back_populates="project_code", order_by="ProjectCodeComment.created_at", cascade="all, delete-orphan"
+    )
+    #: A megrendelői papírok - CSAK OLVASÁSRA (viewonly): a papírok életét a
+    #: saját végpontjuk intézi (lásd routes/megrendeloi_papirok.py), ide azért
+    #: kellenek, hogy a lista egy lekérdezésből tudja, hol tart a papírozás.
+    megrendeloi_szerzodesek: Mapped[list["MegrendeloiSzerzodes"]] = relationship(viewonly=True)
+    megrendeloi_tigek: Mapped[list["MegrendeloiTig"]] = relationship(viewonly=True)
+    #: Az ALVÁLLALKOZÓI eseti szerződések és TIG-ek, amik - forgatás híján -
+    #: közvetlenül ehhez a projektkódhoz kötődnek (lásd models/contract.py
+    #: Contract.project_code_id, models/performance_certificate.py
+    #: PerformanceCertificate.project_code_id, és lentebb
+    #: alvallalkozo_stab_forgatas_nelkul). CSAK OLVASÁSRA: az életciklusukat a
+    #: saját végpontjuk intézi (lásd api/routes/subcontractor_contracts.py és
+    #: performance_certificates.py "projektkód-szintű ág").
+    alvallalkozoi_szerzodesek_forgatas_nelkul: Mapped[list["Contract"]] = relationship(
+        viewonly=True, foreign_keys="Contract.project_code_id"
+    )
+    alvallalkozoi_tigek_forgatas_nelkul: Mapped[list["PerformanceCertificate"]] = relationship(viewonly=True)
+
+    # ── Hol tart a papírozás és a pénz? ──────────────────────────────────────
+    #
+    # Ezek a jelzők a listán mutatják meg, MELYIK projekten van már szerződés,
+    # hol van kész TIG, és mi az, amit még nem fizettek ki. A szabály nem itt
+    # dől el: a "kell-e papír" a services/megrendeloi_papir.papirt_igenyel-é,
+    # a "kész-e egy papír" a models/megrendeloi_papir.papir_kesz-é - ugyanaz,
+    # amit a papír-oldalak használnak, hogy a lista ne mondhasson mást, mint
+    # az adatlap.
+
+    @property
+    def alvallalkozo_stab_forgatas_nelkul(self) -> list["Employee"]:
+        """Azok az emberek, akikről egy FORGATÁS NÉLKÜLI (tisztán ügynökségi)
+        alvállalkozói projekt kiadás miatt kell szerződés és TIG - lásd
+        models/finance.py Expense.alvallalkozo_project_id és
+        Project.alvallalkozo_stab (a forgatáshoz kötött megfelelője).
+
+        Egy Expense IDE tartozik, ha van hozzá alvállalkozó (employee_id), DE
+        nincs konkrét forgatáshoz kötve (alvallalkozo_project_id üres) - ha
+        volna, azt már a Project.alvallalkozo_stab viszi, ott van rá diszpó-
+        mentes, de forgatáshoz kötött szerződés/TIG-igény.
+
+        EMBERENKÉNT egyszer szerepel valaki, még akkor is, ha több ilyen
+        Expense-e van (pl. az eredeti kiadás mellett a kifizetett TIG-hez
+        automatikusan létrejövő "TIG - ..." kiadás-sor is idetartozik, lásd
+        performance_certificates.py mark_szamla_kifizetve_projektkodon) -
+        különben ugyanaz a fél kétszer kérne szerződést/TIG-et."""
+        latott: set[int] = set()
+        eredmeny: list["Employee"] = []
+        for e in self.expenses:
+            # Csak a KÜLSŐS besorolású kiadás papírozandó - az "egyéb"
+            # besorolású extra kiadás emberrel együtt sem kér utókövetést
+            # (lásd models/finance.py Expense.alvallalkozoi_papirt_igenyel).
+            if not e.alvallalkozoi_papirt_igenyel or e.alvallalkozo_project_id is not None:
+                continue
+            if e.employee is None or e.employee.id in latott:
+                continue
+            latott.add(e.employee.id)
+            eredmeny.append(e.employee)
+        return eredmeny
+
+    @property
+    def elmaradt(self) -> bool:
+        """ELMARADT-e az esemény (lásd esemeny_elmaradt).
+
+        Ha igen, ehhez a kódhoz nem kérünk semmit: se szerződést, se TIG-et,
+        se számlát. Ami nem történt meg, arról nincs mit igazolni."""
+        return esemeny_elmaradt(self.esemeny_allapota)
+
+    @property
+    def papir_kell(self) -> bool:
+        from app.services.megrendeloi_papir import papirt_igenyel
+
+        return papirt_igenyel(self)
+
+    @property
+    def szamla_kell(self) -> bool:
+        """Lesz-e SZÁMLA erről a munkáról (lásd
+        services/megrendeloi_szamla.szamlat_varunk).
+
+        Nem csak a számla-lépés kérdése: ahol nincs számla, ott a kihagyott
+        szerződés és TIG sem hiányosság, hanem következmény - nincs is mihez
+        elkészíteni őket."""
+        from app.services.megrendeloi_szamla import szamlat_varunk
+
+        return szamlat_varunk(self)
+
+    @staticmethod
+    def _van_kesz_papir(papirok: list) -> bool:
+        from app.models.megrendeloi_papir import papir_kesz
+
+        return any(papir_kesz(p) for p in papirok)
+
+    @property
+    def keret_fedi(self) -> bool:
+        """Fedi-e EZT a munkát megrendelői keretszerződés.
+
+        A kérdés a PROJEKTKÓDRA vonatkozik, nem az ügyfélre: az számít, hogy
+        ehhez a kódhoz oda van-e kötve egy élő keretszerződés (`contract_id`).
+
+        Korábban azt néztük, van-e az ÜGYFÉLNEK bármilyen élő kerete - ez
+        tömegesen hazudott: egyetlen keretszerződéstől a megrendelő ÖSSZES
+        munkája "keretszerződés alatt"-nak látszott, azok is, amikre a keret
+        nem terjed ki, és amikre a Notion sem így hivatkozik. Márpedig ez a
+        jelölés teendőt tüntet el (eseti szerződést nem kérünk) - tévesen
+        állítva pont a hiányzó papírokat rejti el.
+
+        A kötést a Notion-import hozza (a projektkód "Keretszerződés"
+        relationjéből, lásd notion_import/importers.py), illetve a szerződés
+        készítésekor lehet ráállítani (routes/megrendeloi_papirok.py).
+
+        A TIG-et ez NEM váltja ki: a keret arról szól, milyen feltételekkel
+        dolgozunk együtt, a TIG arról, hogy egy konkrét munka elkészült."""
+        from app.services.megrendeloi_papir import megrendeloi_keret_ervenyes
+
+        if self.contract is None:
+            return False
+        return megrendeloi_keret_ervenyes(self.contract, self.datum)
+
+    @property
+    def keretszerzodes_neve(self) -> str | None:
+        """KIVEL van a keretszerződés - a felület ezt írja ki a "keretszerződés
+        alatt" jelzés mellé. Egy puszta "keretszerződés alatt" ugyanis nem
+        ellenőrizhető: pont az a kérdés, melyik céggel."""
+        if self.contract is None or not self.keret_fedi:
+            return None
+        return self.contract.ceg_neve or (self.contract.client.nev if self.contract.client else None)
+
+    @property
+    def szerzodes_kesz(self) -> bool:
+        """Van-e a megrendelővel LEZÁRT eseti szerződés ezen a projektkódon.
+
+        Egy projektkódhoz több papír is tartozhat (társfinanszírozás, elrontott
+        és újrakezdett példány), ezért elég, ha az egyik lezárt."""
+        return self._van_kesz_papir(self.megrendeloi_szerzodesek)
+
+    @property
+    def szerzodes_kell(self) -> bool:
+        """Kell-e egyedi (eseti) szerződés: keret alatt nem."""
+        return self.papir_kell and not self.keret_fedi
+
+    @property
+    def tig_kesz(self) -> bool:
+        return self._van_kesz_papir(self.megrendeloi_tigek)
+
+    @staticmethod
+    def _kihagyott_papir(papirok: list) -> bool:
+        from app.models.megrendeloi_papir import papir_kesz, papir_kihagyva
+
+        # Ha BÁRMELYIK példány tényleges papír, akkor a papírozás nem kihagyott
+        # - egy elrontott, kihagyottnak jelölt piszkozat mellett ott állhat az
+        # aláírt szerződés is (egy projektkódhoz több papír tartozhat).
+        if any(papir_kesz(p) and not papir_kihagyva(p) for p in papirok):
+            return False
+        return any(papir_kihagyva(p) for p in papirok)
+
+    @property
+    def szerzodes_kihagyva(self) -> bool:
+        """KÉSZ, de nincs papírja: a szerződést tudatosan kihagytuk.
+
+        Ez nem ugyanaz, mint a `szerzodes_kesz` - noha abból is igaz lesz (a
+        "Kihagyva" lezárt állapot). A kettőt a felületnek külön kell mondania:
+        a "Szerződés megvan" egy kihagyott szerződésre olyan állítás, amit
+        később senki nem tud igazolni, és pont azt a néhány munkát rejtené el,
+        amit utólag át kell nézni ("tényleg nem kellett papír?").
+
+        Külön a szerződésre és külön a TIG-re, mert a kettőt külön is szokás
+        kihagyni: keret alatt az eseti szerződés marad el, egy hosszú
+        együttműködésnél inkább a TIG."""
+        return self._kihagyott_papir(self.megrendeloi_szerzodesek)
+
+    @property
+    def tig_kihagyva(self) -> bool:
+        return self._kihagyott_papir(self.megrendeloi_tigek)
+
+    @staticmethod
+    def _kikuldve_varjuk(papirok: list) -> bool:
+        """KÉSZNEK számít (lásd `papir_kesz`), de csak azért, mert VALAMELYIK
+        példány "Kiküldve" állapotban áll - aláírva visszaküldött vagy más
+        úton lezárt (kihagyva / "Van már papír") példány NINCS.
+
+        Ez a különbség eddig sehol nem látszott: a `szerzodes_kesz`/`tig_kesz`
+        szándékosan LEZÁRTNAK veszi a kiküldött papírt is (nincs rajtunk
+        teendő), ezért ezek a munkák eltűntek a teendők közül - miközben a
+        megrendelő oldalán még lóg egy alá nem írt szerződés/TIG, amit
+        érdemes időnként rákérdezni. Lásd models/megrendeloi_papir.py
+        LEZART_ALLAPOTOK, ProjektkodPapirSzuro (frontend) "kiküldve" szűrője."""
+        from app.models.megrendeloi_papir import KIHAGYVA
+
+        if any(p.alairt_file_url for p in papirok):
+            return False
+        if any(p.allapot == "Van már papír" for p in papirok):
+            return False
+        if any(p.allapot == KIHAGYVA for p in papirok):
+            return False
+        return any(p.allapot == "Kiküldve" for p in papirok)
+
+    @property
+    def szerzodes_kikuldve_varjuk(self) -> bool:
+        """A szerződés ki van küldve, de még nem jött vissza aláírva - és
+        semmilyen más úton nincs lezárva (lásd `_kikuldve_varjuk`)."""
+        return self._kikuldve_varjuk(self.megrendeloi_szerzodesek)
+
+    @property
+    def tig_kikuldve_varjuk(self) -> bool:
+        """Ugyanez a teljesítési igazolásra."""
+        return self._kikuldve_varjuk(self.megrendeloi_tigek)
+
+    @property
+    def bevetel_kifizetve(self) -> bool:
+        """Megérkezett-e a pénz: van bevétel-sor, és MINDEGYIK ki van fizetve.
+
+        Bevétel-sor nélkül hamis: olyankor nem tudunk pénzről, tehát nem
+        mondhatjuk, hogy megjött. A lista így hozza előre azt is, ahol csak
+        elfelejtették felvezetni.
+
+        KIVÉTEL: ha valaki kimondta, hogy a pénz megjött, de ez a tétel nem
+        való a bevételek közé (beszámították, máshol könyvelték - lásd
+        bevetelbe_ne_keruljon), akkor a kifizetés dátuma önmagában lezárja. Ez
+        nem "szemet hunyás": a jelöléshez indok is kell, és az ott marad a
+        projektkódon.
+
+        TÖBB ÚTON is bekerülhet a kifizetés: a projektkód-szintű "Kifizetve"
+        gombbal (services/megrendeloi_szamla.jelold_kifizetettnek - egy közös
+        bevétel-sort zár le), FÁJLONKÉNT egy feltöltött számlán
+        (jelold_szamlat_kifizetettnek - lásd DokumentumFeltoltes), vagy a
+        Notionból örökölt "Számla státusza" szövegén keresztül (lásd lentebb).
+        Ezek EGYMÁSTÓL FÜGGETLEN mezők: a projekt-szintű gomb nem írja át a
+        feltöltött számla saját `kifizetve_datuma` mezőjét, és fordítva sem.
+        Ezért VAGY-kapcsolat kell, nem "ha van feltöltött számla, csak azt
+        nézzük": egy simán csatolt (referenciaként feltöltött, de sosem
+        fájlonként lezárt) számla mellett a projekt-szintű gombbal simán
+        kifizetett munka is "még nem érkezett meg"-nek látszana, ha csak a
+        fájlok állapotát vizsgálnánk. A régi (pl. Notionból importált, sosem
+        kifizetettre jelölt) bevétel-sor viszont pont fordítva okoz gondot:
+        VAN feltöltött, kifizetett számla, de egy hozzá nem tartozó, örökké
+        fizetetlen sor a `revenues`-ban örökre "még nem érkezett meg"
+        állapotban tartaná a projektkódot. A VAGY mindezt megoldja."""
+        # Ahol nem is várunk tranzakciót, ott a LEZÁRÁS ténye számít, nem egy
+        # dátum - lásd tranzakcio_nelkul_lezarva.
+        if self.tranzakcio_nelkul_lezarva:
+            return True
+        if self.bevetelbe_ne_keruljon and self.utalas_datuma is not None:
+            return True
+        # NEGYEDIK ÚT: a Notionból örökölt "Számla státusza" szövege szerint
+        # már megjött a pénz (lásd KIFIZETETT_STATUSZ_MINTA). Sok RÉGI
+        # projektkódnál ez az EGYETLEN nyom: a pontos utalási dátumot
+        # Notionban sosem vezették soronként, csak ezt az állapot-szöveget -
+        # e nélkül egy ilyen, valójában lezárt munka örökre "nincs kifizetve"
+        # (Teendők -> Nincs még számla) állapotban ragadna.
+        if self.szamla_statusza and KIFIZETETT_STATUSZ_MINTA in self.szamla_statusza.lower():
+            return True
+        szamlak = self._szamlak()
+        if szamlak and all(szamla.kifizetve_datuma is not None or szamla.tranzakcio_nelkul_lezarva for szamla in szamlak):
+            return True
+        bevetelek = list(self.revenues)
+        return bool(bevetelek) and all(r.fizetes_datuma is not None for r in bevetelek)
+
+    @staticmethod
+    def _hatarido_dict(hatarido: date, *, kifizetve: bool, tranzakcio_nelkul: bool, kifizetes_datuma: date | None) -> dict:
+        """MENNYI IDŐ van még a kifizetésig - vagy mennyivel csúszott, EGY
+        határidőre. A `hatarido_allas` és a `szamla_hataridok` is ebből épül,
+        hogy a projektkód-szintű és a fájlonkénti számítás ne csúszhasson el
+        egymástól.
+
+        Két külön kérdés van, és a válasz is más:
+
+        - **Még nincs kifizetve**: hány nap van hátra (vagy hány napja járt le).
+          Ez TEENDŐ - a lejárt tételekért fel kell hívni a megrendelőt.
+        - **Már ki van fizetve**: hány nappal a határidő ELŐTT vagy UTÁN
+          érkezett a pénz. Ez már nem teendő, hanem tapasztalat: melyik
+          megrendelő fizet időben, és melyik csúszik rendre.
+
+        A napok előjele mindkét esetben ugyanazt jelenti: POZITÍV = jó irány
+        (van még idő / hamarabb fizettek), NEGATÍV = csúszás."""
+        if not kifizetve:
+            napok = (hatarido - date.today()).days
+            allapot = "var" if napok > 0 else "lejart" if napok < 0 else "ma_jar_le"
+            return {"napok": napok, "allapot": allapot, "hatarido": hatarido.isoformat()}
+        if tranzakcio_nelkul or kifizetes_datuma is None:
+            # Kifizetve, de dátum nélkül (tranzakció nélküli lezárás): nincs
+            # mit a határidőhöz mérni.
+            return {"napok": None, "allapot": "kifizetve", "hatarido": hatarido.isoformat()}
+        napok = (hatarido - kifizetes_datuma).days
+        allapot = "elore_fizetve" if napok > 0 else "keson_fizetve" if napok < 0 else "hatarido_napjan"
+        return {"napok": napok, "allapot": allapot, "hatarido": hatarido.isoformat()}
+
+    def _szamlak(self) -> list[Any]:
+        """A projektkódhoz feltöltött SZÁMLA-fájlok - lásd
+        models/document_attachment.py. Nincs valódi ORM-kapcsolat (a
+        csatolmány entity_type + entity_id szerint generikus), ezért egy
+        lekérdezéssel kell előkeríteni - ugyanígy jár el a `_szamla_fajl_url`
+        is (lásd services/megrendeloi_szamla.py).
+
+        A `hatarido_allas` ÉS a `szamla_hataridok` is ezt hívja egy listás
+        válaszon belül - egy PÉLDÁNYON belül gyorsítótárazzuk (nem osztályon,
+        nem globálisan), hogy ne fusson le kétszer ugyanaz a lekérdezés."""
+        cimke = "_szamlak_cache"
+        letezo = self.__dict__.get(cimke)
+        if letezo is not None:
+            return letezo
+        from sqlalchemy import select
+        from sqlalchemy.orm import object_session
+
+        from app.models.document_attachment import DocumentAttachment
+
+        session = object_session(self)
+        if session is None or self.id is None:
+            return []
+        eredmeny = list(
+            session.scalars(
+                select(DocumentAttachment)
+                .where(
+                    DocumentAttachment.entity_type == "projectCode",
+                    DocumentAttachment.entity_id == self.id,
+                    DocumentAttachment.kategoria == "szamla",
+                )
+                .order_by(DocumentAttachment.fizetesi_hatarido.asc().nullslast(), DocumentAttachment.id.asc())
+            )
+        )
+        self.__dict__[cimke] = eredmeny
+        return eredmeny
+
+    @property
+    def hatarido_allas(self) -> dict | None:
+        """MENNYI IDŐ van még a kifizetésig - vagy mennyivel csúszott - a
+        LEGSÜRGŐSEBB feltöltött számla szerint (egy jelvényre ennyi fér).
+        Osztott számlázásnál a `szamla_hataridok` mutatja mindegyiket.
+
+        A fizetési határidő ma FÁJLONKÉNT él (lásd DokumentumFeltoltes,
+        services/megrendeloi_szamla.py) - a projektkód saját
+        `fizetesi_hatarido` mezője csak a régi, egy-számlás projektkódokon
+        (vagy a Notionból örökölt sorokon) hordoz még adatot, ezért csak
+        akkor esünk vissza rá, ha egyetlen feltöltött számlának sincs
+        határideje."""
+        legsurgosebb: dict | None = None
+        legsurgosebb_sorrend: tuple | None = None
+        for szamla in self._szamlak():
+            if szamla.fizetesi_hatarido is None:
+                continue
+            allas = self._hatarido_dict(
+                szamla.fizetesi_hatarido,
+                kifizetve=szamla.kifizetve_datuma is not None or szamla.tranzakcio_nelkul_lezarva,
+                tranzakcio_nelkul=szamla.tranzakcio_nelkul_lezarva,
+                kifizetes_datuma=szamla.kifizetve_datuma,
+            )
+            # A LEJÁRT, még ki nem fizetett a legsürgősebb - utána a
+            # legközelebbi határidő, végül bármi (kifizetett) sorrendben.
+            sorrend = (0 if allas["allapot"] == "lejart" else 1 if allas["napok"] is not None else 2, allas["napok"] or 0)
+            if legsurgosebb_sorrend is None or sorrend < legsurgosebb_sorrend:
+                legsurgosebb, legsurgosebb_sorrend = allas, sorrend
+        if legsurgosebb is not None:
+            return legsurgosebb
+        # RÉGI, egy-számlás adat: a projektkód saját mezője.
+        if self.fizetesi_hatarido is None:
+            return None
+        return self._hatarido_dict(
+            self.fizetesi_hatarido,
+            kifizetve=self.bevetel_kifizetve,
+            tranzakcio_nelkul=self.tranzakcio_nelkul_lezarva,
+            kifizetes_datuma=self.utalas_datuma,
+        )
+
+    @property
+    def szamla_hataridok(self) -> list[dict]:
+        """MENNYI IDŐ van a kifizetésig - vagy mennyivel csúszott -
+        MINDEGYIK feltöltött számlához külön, osztott számlázásnál (több
+        számla egy projektkódon) rendezetten megjeleníthető formában. Lásd
+        `hatarido_allas` az egyetlen, "legsürgősebb" változatért."""
+        eredmeny = []
+        for szamla in self._szamlak():
+            if szamla.fizetesi_hatarido is None:
+                continue
+            allas = self._hatarido_dict(
+                szamla.fizetesi_hatarido,
+                kifizetve=szamla.kifizetve_datuma is not None or szamla.tranzakcio_nelkul_lezarva,
+                tranzakcio_nelkul=szamla.tranzakcio_nelkul_lezarva,
+                kifizetes_datuma=szamla.kifizetve_datuma,
+            )
+            eredmeny.append({**allas, "cimke": szamla.filename})
+        return eredmeny
+
+    @staticmethod
+    def _osszeg(sor: Any) -> float:
+        """Egy kiadás/bevétel elszámolási összege: a NETTÓ (lásd
+        services/elszamolas.py).
+
+        Bevételnél és kiadásnál ugyanaz a szabály - enélkül a kettő
+        különbsége, vagyis a projekt profitja, a két oldal ÁFA-tartalmának
+        különbségével csúszna el. Ha egy régi soron csak bruttó van, arra
+        esünk vissza: adathiányban az a legjobb közelítés (ÁFÁ-t viszont nem
+        számolunk vissza belőle - a 27%-os osztás ugyanolyan találgatás lenne,
+        mint a felszorzás)."""
+        return elszamolas.osszeg(sor)
+
+    def _kulsos_bontas(self) -> tuple[float, float]:
+        """(külsős, egyéb) - egy menetben, mert a kettő ugyanazon a szűrésen
+        osztozik, és külön-külön kiszámolva kétszer járnánk be mindent."""
+        from app.models.employee import EmployeeType
+        from app.services import kulsos_koltseg
+
+        # A külsős munka ára a TIG-eken áll (az ide tartozó forgatásokra eső
+        # rész), nem a belőlük keletkezett Kiadás soron: így a még KI NEM
+        # FIZETETT, de már beadott számla is látszik a projekt költségében.
+        # A TIG-ből származó Kiadás sorokat ezért kihagyjuk - ugyanaz a pénz.
+        tig_osszeg, tig_kiadas_idk = kulsos_koltseg.projektkod_kulsos(self)
+
+        kulsos = tig_osszeg
+        egyeb = 0.0
+        for e in self.expenses:
+            if e.id in tig_kiadas_idk:
+                continue
+            osszeg = self._osszeg(e)
+            # A TIG-en kívüli külsős kifizetéseket két jelről ismerjük fel: a
+            # sor `tipus="kulsos"` jelöléséről, vagy a hozzá kötött EMBER
+            # típusáról - a Notionból hozott soroknál a "Kiadás formája"
+            # szabad szöveg volt, arra nem lehet szabályt építeni.
+            if (e.tipus or "").strip().lower() == "kulsos" or (
+                e.employee is not None and e.employee.tipus == EmployeeType.KULSOS
+            ):
+                kulsos += osszeg
+            else:
+                egyeb += osszeg
+        return kulsos, egyeb
+
+    @property
+    def kulsos_koltseg(self) -> float:
+        """A KÜLSŐS közreműködők ára: az ide tartozó forgatásokra szóló TIG-ek
+        (a rájuk eső rész, nettóban) + a TIG-en kívüli külsős kifizetések.
+
+        A be nem fizetett számla is ide tartozik: a pénz akkor is ki fog menni,
+        és a projekt profitja addig sem hazudhat."""
+        return self._kulsos_bontas()[0]
+
+    @property
+    def egyeb_kiadas(self) -> float:
+        """Minden más Kiadás sor: bérlés, utazás, kellék, belsős extra…
+
+        Nem felsorolás, hanem MARADÉK - így a négy költség-rész összege pontosan
+        az `osszes_koltseg`, nem marad ki semmi egy hiányzó kategória miatt."""
+        return self._kulsos_bontas()[1]
+
+    @property
+    def _anyagok(self) -> list[Any]:
+        """A projektkódhoz tartozó összes vágandó anyag: a rá közvetlenül
+        kötöttek ÉS a forgatásain lógók, ismétlés nélkül."""
+        anyagok = {d.id: d for d in self.deliverables}
+        for projekt in self.projects:
+            for d in getattr(projekt, "deliverables", []) or []:
+                anyagok.setdefault(d.id, d)
+        return list(anyagok.values())
+
+    @property
+    def vagas_koltseg(self) -> float:
+        """Az utómunka ára: a MÉRT munkaidőből (Timesheet) számolt költség -
+        ugyanaz a szám, ami az anyag oldalán a "Munkaidő-elszámolások" tábla
+        alján áll (lásd services/deliverable_actions.anyag_osszesitok).
+
+        SZÁNDÉKOSAN nem a `Deliverable.koltseg` mező: az egy régi, kézzel vagy
+        importból beírt összeg, ami nem követi a méréseket. Egy utólag
+        rögzített (vagy törölt) munkaidő-sor után ott elavult szám marad, és a
+        projekt költsége azzal hazudna.
+
+        Ha egy anyagon EGYÁLTALÁN nincs mérés (régi, Notionból hozott sorok),
+        marad a rögzített mező: nullát írni oda rosszabb hazugság lenne, mint
+        egy régi szám (lásd deliverable_actions.anyag_koltsege). Munkamenet
+        nélküli (leválasztott) példánynál ugyanez."""
+        from sqlalchemy import inspect as sa_inspect
+        from sqlalchemy.orm import object_session
+
+        from app.services import deliverable_actions
+
+        anyagok = self._anyagok
+        db = object_session(self)
+        if db is None:
+            return float(sum(d.koltseg or 0 for d in anyagok))
+
+        # Ha a mérések MÁR BE VANNAK TÖLTVE (a lista-lekérdezés eager loaddal
+        # hozza őket), a kapcsolatból dolgozunk - enélkül a lista soronként
+        # indítana egy-egy lekérdezést, ami több száz körré hízna.
+        betoltott = all("timesheets" not in sa_inspect(d).unloaded for d in anyagok)
+        if betoltott:
+            sorok = [t for d in anyagok for t in (d.timesheets or [])]
+            osszesitok = deliverable_actions.sorok_osszesitese(db, sorok)
+        else:
+            osszesitok = deliverable_actions.anyag_osszesitok(db, [d.id for d in anyagok])
+        return float(sum(deliverable_actions.anyag_koltsege(osszesitok, d) for d in anyagok))
+
+    @property
+    def belsos_munka_koltseg(self) -> float:
+        """A projektkód alatti forgatásokon dolgozó BELSŐSÖK napidíja.
+
+        Nem kiadás-sor, csak számítás: a belsős alapbére a hónap végén EGYBEN
+        kerül a kiadások közé, itt csak azt látjuk, mennyi saját munka van
+        ebben a projektben (lásd services/belsos_koltseg.py)."""
+        from app.services import belsos_koltseg
+
+        return belsos_koltseg.projektkod_koltsege(self)
 
     @property
     def osszes_koltseg(self) -> float:
-        """Számított: belsos + alvallalkozok + vagasi koltseg. Lásd FinanceService."""
-        return sum(e.brutto or 0 for e in self.expenses)
+        """Számított: az összes projektkiadás (alvállalkozói/belsős TIG-ekből
+        keletkezett Expense-ek is ide tartoznak, hiszen azok is Expense-ként
+        jönnek létre - lásd performance_certificates.py /szamla-kifizetve) +
+        az utómunka/vágási költség (Deliverable.koltseg) + a projekten dolgozó
+        BELSŐSÖK napidíja. Ez a projekt VALÓS teljes költsége - szándékosan nem
+        szűri a Pénzügy-gate (hozzaadas_a_kiadasokhoz), mert az csak a globális
+        Pénzügy nézet összesítőit korlátozza (lásd api/routes/finance.py), nem
+        azt, hogy mi számít az adott projekt költségének.
+
+        A belsős napidíj azért van benne, mert nélküle a saját emberünk munkája
+        ingyennek látszana, és minden projekt profitja szebb lenne a
+        valóságnál. A Pénzügyek kiadás-listáját ez NEM érinti: oda a belsős bér
+        a hónap végén, egy tételben kerül be."""
+        # Négy rész, amit az adatlap külön-külön is kiír: külsős stáb, egyéb
+        # kiadás, vágás, belsős munkanapok. Mindegyik float (a pénzoszlopok
+        # Numeric-ek, a napidíj viszont számított float - a kettő közvetlen
+        # összeadása TypeError-t dobna).
+        kulsos, egyeb = self._kulsos_bontas()
+        return kulsos + egyeb + self.vagas_koltseg + self.belsos_munka_koltseg
+
+    @property
+    def bevetel(self) -> float:
+        """MENNYI JÖN BE ezen a munkán - nettóban.
+
+        Két forrásból, ebben a sorrendben:
+
+        1. a **tényleges bevétel-sorok** (Pénzügyek), ha vannak: az a rögzített
+           valóság, azt nem írja felül egy papíron szereplő szám;
+        2. különben a **vállalási ár**: a TIG-ről, annak híján a szerződésről,
+           annak híján a projektkód saját mezőjéből (lásd
+           services/projektkod_osszeg.py) - forintra váltva, ha devizás munka.
+
+        Miért kell a második? Mert a bevétel-sor csak a KIFIZETÉSKOR keletkezik
+        (lásd services/megrendeloi_szamla.py). Addig a projekt nulla bevétellel
+        és csupa veszteséggel állt a listán, pedig az összeg rég ismert volt -
+        ott áll a szerződésen és a TIG-en. A profit épp arra való, hogy megmondja,
+        megéri-e a munka; ehhez nem a pénz beérkezésére kell várni, hanem tudni
+        kell, mennyiért vállaltuk.
+
+        Nettó, mert a költség oldalán is az van (lásd `_osszeg` és
+        services/elszamolas.py) - két különböző szemlélet különbsége nem
+        profit, hanem ÁFA.
+
+        Ez a szám a PROJEKT képe, nem a cég éves bevétele: az utóbbi továbbra is
+        kizárólag a tényleges bevétel-sorokból számol (lásd routes/finance.py),
+        tehát egy még ki nem fizetett munka nem duzzasztja fel az éves bevételt."""
+        sorok = float(sum(self._osszeg(r) for r in self.revenues))
+        if sorok:
+            return sorok
+        from app.services import projektkod_osszeg
+
+        netto, _ = projektkod_osszeg.forintban(self)
+        return float(netto or 0)
+
+    @property
+    def bevetel_deviza(self) -> dict | None:
+        """MIBŐL lett a forintos bevétel, ha devizás munka. Különben None.
+
+        A `bevetel` mindig FORINT - a fenti kártyák, a lista, a profit mind
+        abban számol, mert a könyvelésünk abban vezet. Devizás munkánál viszont
+        a szám önmagában nem ellenőrizhető: a "121 288 Ft" mögött ott van egy
+        318 EUR és egy árfolyam, és a kettő nélkül nem látszik, hogy az összeg
+        át van-e egyáltalán váltva. (Az átváltatlan 318 "Ft" pont ugyanúgy néz
+        ki, mint egy szokásos forintos összeg.)
+
+        Csak a VÁLLALÁSI ÁR-ból számolt bevételnél van értelme: a tényleges
+        bevétel-sorok már forintban keletkeznek (lásd services/penznem.py),
+        azoknál nincs mit átváltani."""
+        if float(sum(self._osszeg(r) for r in self.revenues)):
+            return None
+        from app.services import penznem as penznem_szolg
+        from app.services import projektkod_osszeg
+
+        if not penznem_szolg.devizas(self.penznem):
+            return None
+        netto, _ = projektkod_osszeg.szamlazott_osszeg(self)
+        if netto is None:
+            return None
+        # Árfolyam nélkül is visszaadjuk: épp az a legfontosabb eset, amikor
+        # HIÁNYZIK - olyankor a bevétel nulla, és ennek látszania kell.
+        return {
+            "penznem": penznem_szolg.normalizald(self.penznem),
+            "netto": netto,
+            "arfolyam": float(self.arfolyam) if self.arfolyam else None,
+        }
 
     @property
     def becsult_profit(self) -> float:
-        bevetel = sum(r.brutto or 0 for r in self.revenues)
-        return bevetel - self.osszes_koltseg
+        return self.bevetel - self.osszes_koltseg

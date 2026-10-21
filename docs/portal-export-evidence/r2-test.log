@@ -1,0 +1,9 @@
+{"source_bytes": 50331648, "archive_bytes": 50332026, "sha256": "e5c00bae960e5968bd0277a206d86df01fb26be845a4b58aaaf46755fe8b1707", "range_status": 206, "seconds": 12.99}
+.
+=============================== warnings summary ===============================
+../../venv/lib/python3.14/site-packages/google/genai/types.py:42
+  /Users/gergelyvidor/Documents/Codex/2026-09-08/kene-nekem-egy-megoldas-arra-h/work/venv/lib/python3.14/site-packages/google/genai/types.py:42: DeprecationWarning: '_UnionGenericAlias' is deprecated and slated for removal in Python 3.17
+    VersionedUnionType = Union[builtin_types.UnionType, _UnionGenericAlias]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+1 passed, 1 warning in 15.19s

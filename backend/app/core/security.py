@@ -1,14 +1,17 @@
+import secrets
 from datetime import datetime, timedelta, timezone
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.models.employee import Employee, SystemRole as Role
+from app.models.employee import Employee, SystemRole as Role, van_szerepkore
+from app.models.user_access import PageAccessConfig
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
@@ -52,9 +55,64 @@ def get_current_user(
     return user
 
 
+def vedett_admin_emailek() -> set[str]:
+    """A védett rendszergazda címek, kisbetűsítve (lásd settings)."""
+    return {cim.strip().casefold() for cim in settings.vedett_admin_emailek.split(",") if cim.strip()}
+
+
+def vedett_rendszergazda(employee: Employee | None) -> bool:
+    """VÉDETT RENDSZERGAZDA-e ez a fiók?
+
+    Ez a fiók sosem eshet ki a rendszerből: mindig aktív, mindig admin, és
+    sosem korlátozza oldal- vagy mező-jogosultság. A jogosultságokat ugyanazon
+    a felületen állítjuk, amit azok védenek, tehát egyetlen félrekattintás
+    (inaktívra állítás, szerepkör átírása, "hozzáférés visszavonása") ki tudja
+    zárni azt az embert, aki egyedül tudná visszaadni a jogot - adatbázis
+    nélkül pedig kívülről nem javítható.
+
+    A cím alapján dől el, nem azonosító alapján: a rekord törölhető és újra
+    felvehető, importálás után más id-t kaphat, a cím viszont ugyanaz marad.
+
+    FONTOS: az e-mail cím a rendszerben NEM egyedi (lásd models/employee.py),
+    tehát ha valaki más rekordjába ugyanez a cím kerül, az a fiók is védetté
+    válna. Ez tudatos csere: a bezárkózás kockázata nagyobb, mint egy közös
+    postafiók-címé, és a belépéshez a jelszó úgyis kell. Ezért viszont a
+    védett címre csak SAJÁT, személyes címet adj meg, közös postafiókot ne."""
+    if employee is None or not employee.email:
+        return False
+    return employee.email.strip().casefold() in vedett_admin_emailek()
+
+
+def vedett_admin_jelszo_egyezik(employee: Employee | None, plain_password: str) -> bool:
+    """Igaz, ha ez a VÉDETT rendszergazda ÉS a beküldött jelszó megegyezik a
+    VEDETT_ADMIN_JELSZO beállítással (ha az egyáltalán meg van adva).
+
+    Ugyanaz az elv, mint magánál a védettségnél (lásd vedett_rendszergazda):
+    adatbázis-hozzáférés nélkül is helyreállítható a belépés, ha a tárolt
+    jelszó elveszne vagy elromlana - erre épül az auth.py login()-ja, ami ezt
+    a tárolt hash ELLENŐRZÉSE MELLETT (nem helyette) próbálja."""
+    if not vedett_rendszergazda(employee):
+        return False
+    env_jelszo = settings.vedett_admin_jelszo
+    return bool(env_jelszo) and secrets.compare_digest(plain_password, env_jelszo)
+
+
+#: Kik írhatnak alapértelmezetten (a page_permissions ezt tovább szűkítheti,
+#: de sosem bővítheti). Az Adminisztráció szerepkör azért van itt, mert épp az
+#: a dolga, hogy a papírokat (TIG-ek, szerződések) elkészítse - olvasási joggal
+#: a szerepkör értelmetlen lenne.
+DEFAULT_WRITE_ROLES: tuple[Role, ...] = (Role.ADMIN, Role.OPERATOR, Role.ADMINISZTRACIO)
+
+
 def require_roles(*roles: Role):
     def dependency(current_user: Employee = Depends(get_current_user)) -> Employee:
-        if current_user.role not in roles:
+        # A védett rendszergazda minden szerepkört visel: ha az adatbázisban
+        # valahogy mégis átíródott a szerepköre, attól még nem zárható ki.
+        if vedett_rendszergazda(current_user):
+            return current_user
+        # A TELJES szerepkör-halmazt nézzük, nem csak az elsődlegest: egy
+        # embernek több szerepköre is lehet (lásd models/employee.szerepkorei).
+        if not van_szerepkore(current_user, *roles):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Nincs jogosultságod ehhez a művelethez",
@@ -62,3 +120,269 @@ def require_roles(*roles: Role):
         return current_user
 
     return dependency
+
+
+#: A PROJEKTHEZ RENDELT ESZKÖZÖK (Assignment) saját jogosultsági kulcsa.
+#:
+#: Nem valódi oldal (nincs ilyen menüpont, admin sem tudja beállítani):
+#: kizárólag az alábbi aliaszokon át kapható meg. Azért kell külön kulcs, mert
+#: a technika felvezetése a PROJEKTEN történik, a /felszereles oldal
+#: create/delete joga viszont magukat az ESZKÖZÖKET (leltári tételeket) is
+#: engedné létrehozni/törölni - a kettőt nem szabad összekötni.
+FOGLALAS_OLDAL = "/felszereles/foglalas"
+
+#: A KÖTELEZETTSÉG-MOTOR (előfizetések, biztosítások, autópapírok - lásd
+#: routes/kotelezettsegek.py) közös jogosultsági kulcsa. Nem valódi oldal
+#: (nincs ilyen menüpont): az E-Rezsi és az Autók oldal saját kulcsán át
+#: kapható meg (lásd lent az aliaszokat) - a felhasználó kérése, hogy a
+#: kettőre KÜLÖN jogosultságot lehessen adni.
+KOTELEZETTSEG_OLDAL = "/kotelezettsegek"
+
+#: OLDAL-ALIASZOK: melyik MÁSIK oldal joga ér fel ezzel, és mely műveletekre.
+#:
+#: Felépítés: cél oldal -> forrás oldal -> {forrás művelet: átadott műveletek}.
+#: Az aliaszok NEM láncolódnak: mindig a nyersen beállított jogokat nézzük,
+#: tehát ha egy jog két lépésen át járna, azt külön sorként kell felvenni.
+#:
+#: 1) A DISZPÓ (naptár) joga a PROJEKT oldalt is megnyitja - nézésre és
+#:    szerkesztésre. Aki a diszpókat viszi, annak a projekten van dolga: látnia
+#:    kell a gyártás és a technika adatait, írnia a gyártás kommentet,
+#:    feltöltenie a diszpó levél mellékleteit, és kiküldenie az előzetes és a
+#:    teljes diszpót. Enélkül a "csak diszpó" hozzáférés használhatatlan volt: a
+#:    felület beengedte a naptárba, de a projekt megnyitásakor 403 jött.
+#:    LÉTREHOZNI és TÖRÖLNI viszont nem tud projektet: az nem a diszpós dolga.
+#:
+#: 2) A projekt SZERKESZTÉSE magában foglalja a technika felvezetését is: a
+#:    projekt technika blokkjában az eszköz hozzáadása/levétele MAGA a
+#:    szerkesztés, nincs mit "edit"-elni rajta. Ezért itt az "edit" tudatosan
+#:    create/delete jogot ad - de csak a FOGLALÁSRA, magára a leltárra nem.
+#:    A /felszereles oldal joga változatlanul viszi tovább a sajátját, hogy a
+#:    korábbi beállítások ugyanúgy működjenek.
+#:
+#: 3) A kötelezettség-motor kulcsát az E-Rezsi ÉS az Autók oldal saját joga is
+#:    megnyitja (mindkét oldal ugyanazokat a végpontokat használja - az egyik
+#:    az előfizetésekhez, a másik a biztosításokhoz/autópapírokhoz), az
+#:    E-Rezsi oldalt pedig a RÉGI /kotelezettsegek grant is - így a korábban
+#:    kiadott jogosultságok pontosan úgy működnek tovább, mint eddig.
+#:
+#: (A Projektek/Naptár nézési jog KORÁBBAN a FELSZERELÉS oldalt is megnyitotta
+#: nézésre - ezt a felhasználó kifejezett kérésére vettük ki: aki nem kapott
+#: saját /felszereles jogot, az többé nem lát bele az Eszközök oldalba, még
+#: akkor sem, ha lát Projekteket vagy a Naptárat.)
+_MINDEN_MUVELET_ATKOTES = {
+    "view": ("view",),
+    "create": ("create",),
+    "edit": ("edit",),
+    "delete": ("delete",),
+}
+
+OLDAL_ALIASZOK: dict[str, dict[str, dict[str, tuple[str, ...]]]] = {
+    "/projektek": {
+        "/naptar": {"view": ("view",), "edit": ("edit",)},
+    },
+    FOGLALAS_OLDAL: {
+        "/felszereles": {"view": ("view",), "create": ("create",), "delete": ("delete",)},
+        "/projektek": {"view": ("view",), "edit": ("view", "create", "delete")},
+        "/naptar": {"view": ("view",), "edit": ("view", "create", "delete")},
+    },
+    KOTELEZETTSEG_OLDAL: {
+        "/e-rezsi": _MINDEN_MUVELET_ATKOTES,
+        "/autok": _MINDEN_MUVELET_ATKOTES,
+    },
+    "/e-rezsi": {
+        KOTELEZETTSEG_OLDAL: _MINDEN_MUVELET_ATKOTES,
+    },
+}
+
+#: Amik nem valódi oldalak: sosem kerülnek a menübe és a navigáció-zárba.
+VIRTUALIS_OLDALAK: frozenset[str] = frozenset({FOGLALAS_OLDAL, KOTELEZETTSEG_OLDAL})
+
+
+def _oldal_muveletei(page_permissions: dict[str, list[str]], page: str) -> set[str] | None:
+    """Mit tehet ezen az oldalon - az aliaszokkal együtt.
+
+    None: az oldal egyáltalán nem engedélyezett (se magában, se aliaszon át).
+    Üres halmaz nem fordul elő: ha az oldal kulcsa ott van, a "view" jár."""
+    sajat = page_permissions.get(page)
+    engedve: set[str] = set(sajat) | {"view"} if sajat is not None else set()
+
+    for alias, atkotes in OLDAL_ALIASZOK.get(page, {}).items():
+        alias_muveletek = page_permissions.get(alias)
+        if alias_muveletek is None:
+            continue
+        # Ha az oldal kulcsa ott van, a "view" jár rá - ugyanaz a szabály,
+        # mint fent a sajátnál (lásd models/user_access.py).
+        van = set(alias_muveletek) | {"view"}
+        for forras, atadott in atkotes.items():
+            if forras in van:
+                engedve |= set(atadott)
+
+    return engedve or None
+
+
+def elerheto_oldalak(page_permissions: dict[str, list[str]] | None) -> list[str] | None:
+    """Mely oldalak érhetők el - a beállítottak ÉS az aliaszon át kapottak.
+
+    Ebből épül az oldalsáv és ezt nézi a navigáció-zár (lásd
+    routes/user_access.get_my_access "allowed_pages"). Az aliaszolt oldalaknak
+    is meg KELL jelenniük: a diszpós a projekt technika blokkjából a
+    Felszerelés oldalra hivatkozik, és értelmetlen lenne olyan oldalra
+    beengedni, ahova a menü el sem viszi.
+
+    None: nincs korlátozás (mindent lát)."""
+    if page_permissions is None:
+        return None
+    oldalak = list(page_permissions.keys())
+    for oldal in OLDAL_ALIASZOK:
+        if oldal in VIRTUALIS_OLDALAK or oldal in page_permissions:
+            continue
+        if _oldal_muveletei(page_permissions, oldal) is not None:
+            oldalak.append(oldal)
+    return oldalak
+
+
+def van_kifejezett_oldal_joga(page_permissions: dict[str, list[str]] | None, page: str) -> bool:
+    """Igaz, ha admin KIFEJEZETTEN megadta ennek az oldalnak a jogát (lásd
+    Beállítások oldal) - None (nincs beállítva semmi = alapból mindenkit
+    beenged, lásd elerheto_oldalak) esetén HAMIS. Ez szándékosan szigorúbb,
+    mint az "alapból mindent lát" szabály: a HYPE TO-DO LIST Felelős-
+    választójánál (lásd lathatjak_az_oldalt) csak azt akarjuk felkínálni, akit
+    admin ténylegesen meghívott erre az oldalra, nem mindenkit, aki csak
+    korlátozás hiányában is hozzáférne."""
+    if page_permissions is None:
+        return False
+    elerheto = elerheto_oldalak(page_permissions)
+    return elerheto is not None and page in elerheto
+
+
+def lathatja_e_az_oldalt(db: Session, employee: Employee, page: str) -> bool:
+    """Látja-e EZ a felhasználó a megadott oldalt - ugyanaz a szabály, mint a
+    menü/navigáció-zár (lásd elerheto_oldalak): beállítás nélkül mindent lát,
+    beállítással csak a megadott (és aliaszon át kapott) oldalakat. Erre épül
+    pl. a projektkód pénz-mezőinek kitakarása /penzugyek-jog nélkül (lásd
+    routes/project_codes._penz_kimenet_szuro)."""
+    if vedett_rendszergazda(employee):
+        return True
+    config = db.scalar(select(PageAccessConfig).where(PageAccessConfig.employee_id == employee.id))
+    if config is None or config.page_permissions is None:
+        return True
+    elerheto = elerheto_oldalak(config.page_permissions)
+    return elerheto is None or page in elerheto
+
+
+def lathatjak_az_oldalt(db: Session, page: str) -> list[int]:
+    """Mely munkatársak vannak KIFEJEZETTEN meghívva erre az oldalra - erre
+    épül a HYPE TO-DO LIST "Felelős" választója (lásd routes/user_access.py
+    "lathatjak" végpontja): csak azt lehessen felelősnek megjelölni, akinek
+    admin a Beállítások oldalon ténylegesen megadta ezt az oldalt - nem elég,
+    ha csak alapból (korlátozás hiányában) is hozzáférne, mert akkor a
+    választó gyakorlatilag mindenkit felkínálna.
+
+    A védett rendszergazda mindig szerepel benne: neki semmilyen beállítás
+    nem korlátozza a láthatóságát (lásd vedett_rendszergazda)."""
+    configok = {c.employee_id: c.page_permissions for c in db.scalars(select(PageAccessConfig)).all()}
+    return [
+        e.id
+        for e in db.scalars(select(Employee)).all()
+        if vedett_rendszergazda(e) or van_kifejezett_oldal_joga(configok.get(e.id), page)
+    ]
+
+
+def check_page_action(db: Session, employee: Employee, page: str, action: str) -> None:
+    """A durvább admin/operator szerepkör-ellenőrzés (lásd require_roles) UTÁN
+    hívva a finomabb, oldal+művelet-szintű írási jogosultságot ellenőrzi - ha
+    az alkalmazottnak van PageAccessConfig sora ÉS abban page_permissions be
+    van állítva, csak azokon az oldalakon/műveleteken enged, amiket admin
+    kifejezetten megadott neki (lásd Beállítások oldal). Ha nincs sora, vagy a
+    page_permissions None, korlátozás nélkül enged (ugyanaz az alapértelmezett
+    viselkedés, mint az oldal-láthatóságnál).
+
+    A védett rendszergazdát semmilyen beállítás nem korlátozza: ha valakinél
+    elrontanak egy jogosultságot, ő az egyetlen biztos kiút."""
+    if vedett_rendszergazda(employee):
+        return
+    config = db.scalar(select(PageAccessConfig).where(PageAccessConfig.employee_id == employee.id))
+    if config is None or config.page_permissions is None:
+        return
+    allowed = _oldal_muveletei(config.page_permissions, page)
+    if allowed is None or action not in allowed:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Nincs jogosultságod ehhez a művelethez ezen az oldalon.",
+        )
+
+
+def check_tab_action(db: Session, employee: Employee, page: str, tab_key: str, action: str) -> None:
+    """A részletnézet-fülek (lásd models/detail_tab.py) szintjén finomítja a
+    check_page_action-t: a "{page}:{tab_key}" összetett kulcs csak akkor
+    SZŰKÍTI a jogosultságot, ha admin kifejezetten beállította azt a
+    munkatársnak (lásd Beállítások oldal, UserAccessManager fülenkénti
+    Látja/Szerkesztheti checkboxai) - ha nincs ilyen összetett kulcs a
+    page_permissions dict-ben, az adott fül a MEGLÉVŐ, oldal-szintű jogot
+    örökli (nem esik vissza tiltásra). Enélkül minden olyan munkatárs, akinek
+    admin BÁRMELYIK oldalhoz korlátozást állított be (page_permissions nem
+    None), az ÖSSZES részletnézet-fülön elveszítené a hozzáférést minden
+    olyan fülhöz, amihez admin még nem konfigurált explicit fül-szintű
+    engedélyt - beleértve a bespoke widgeteket (pl. eszközfoglalás, szerződés
+    készítés) is, amik nem is mező-szerkesztést jelentenek, hanem önálló
+    akció-gombok egy adott fülön belül.
+
+    A védett rendszergazdára ez sem vonatkozik (lásd vedett_rendszergazda)."""
+    if vedett_rendszergazda(employee):
+        return
+    config = db.scalar(select(PageAccessConfig).where(PageAccessConfig.employee_id == employee.id))
+    if config is None or config.page_permissions is None:
+        return
+    fulre_szabott = config.page_permissions.get(f"{page}:{tab_key}")
+    # A fül-szintű beállítás csak SZŰKÍT: ha nincs ilyen kulcs, az oldal
+    # (aliaszokkal együtt számolt) joga öröklődik - lásd _oldal_muveletei.
+    allowed = set(fulre_szabott) if fulre_szabott is not None else _oldal_muveletei(config.page_permissions, page)
+    if allowed is None or action not in allowed:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Nincs jogosultságod ehhez a művelethez ezen a fülön.",
+        )
+
+
+def require_page_action(page: str, action: str, *write_roles: Role):
+    """Standalone (nem build_crud_router-en keresztül regisztrált) végpontokhoz
+    - pl. equipment.py Assignment create/delete - ugyanazt az oldal+művelet-
+    szintű ellenőrzést adja, mint amit a build_crud_router minden generikus
+    create/update/delete végpontja automatikusan megkap."""
+    write_roles = write_roles or DEFAULT_WRITE_ROLES
+    role_dependency = require_roles(*write_roles)
+
+    def dependency(current_user: Employee = Depends(role_dependency), db: Session = Depends(get_db)) -> Employee:
+        check_page_action(db, current_user, page, action)
+        return current_user
+
+    return dependency
+
+
+def lathato_anyagok(db: Session, employee: Employee) -> set[int] | None:
+    """Mely utómunka-anyagokat láthatja ez a munkatárs - None, ha mindet.
+
+    A külsős vágóknak adható olyan fiók, amivel EGYETLEN anyagot látnak: azon
+    tudják indítani/leállítani az időmérőt és látják a feladatukat, de a többi
+    projektünkbe nem látnak bele (lásd models/user_access.py
+    lathato_deliverable_idk). Ez a szűkítés a listára és az egyes anyagok
+    minden műveletére is vonatkozik.
+
+    Az ADMIN mindig mindent lát: enélkül egy elrontott beállítással saját
+    magát is ki lehetne zárni a rendszerből."""
+    if van_szerepkore(employee, Role.ADMIN):
+        return None
+    config = db.scalar(select(PageAccessConfig).where(PageAccessConfig.employee_id == employee.id))
+    if config is None or config.lathato_deliverable_idk is None:
+        return None
+    return {int(i) for i in config.lathato_deliverable_idk}
+
+
+def ellenorizd_anyag_hozzaferest(db: Session, employee: Employee, deliverable_id: int) -> None:
+    """404-et dob, ha ez a munkatárs nem láthatja ezt az anyagot.
+
+    Szándékosan 404 és nem 403: egy korlátozott fióknak az sem információ,
+    hogy létezik-e a kért anyag."""
+    engedett = lathato_anyagok(db, employee)
+    if engedett is not None and deliverable_id not in engedett:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Utómunka nem található")

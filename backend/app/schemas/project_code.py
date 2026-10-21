@@ -1,18 +1,71 @@
-from datetime import date
+from datetime import date, datetime
 
 from pydantic import BaseModel
 
 
 class ProjectCodeBase(BaseModel):
     projektkod: str
-    client_id: int
+    #: A projekt neve - felvételkor EZT kérjük az ügyfél helyett (a
+    #: felhasználó kérése): a kód lefoglalásakor a munka neve már megvan, az
+    #: ügyfél sokszor később dől el, és az adatlapon utólag megadható.
+    project_nev: str | None = None
+    #: Opcionális: a kód gyakran előbb kell, mint ahogy eldől, kinek a munkája
+    #: (lásd models/project_code.py).
+    client_id: int | None = None
     contract_id: int | None = None
     datum: date | None = None
+    #: A dátum MEGJEGYZÉSE ("2026. május", "két hétvégén") - a felvételkor ezt
+    #: kérjük a naptári dátum helyett, mert egy projektkód alatt több forgatás
+    #: is fut, és a pontos napokat úgyis a projektek hordozzák.
+    datum_megjegyzes: str | None = None
     esemeny_allapota: str | None = None
     penznem: str = "HUF"
     arfolyam: float | None = None
     tig_statusza: str | None = None
     szamla_statusza: str | None = None
+    megjegyzes: str | None = None
+    #: MIÉRT ennyi a vállalási ár (pl. "beszámítva X fizetésébe") - lásd
+    #: models/project_code.vallalasi_ar_magyarazat.
+    vallalasi_ar_magyarazat: str | None = None
+    teljesites_datuma: date | None = None
+    utalas_datuma: date | None = None
+    szamla_url: str | None = None
+    tig_alairva_url: str | None = None
+
+
+class BevetelDeviza(BaseModel):
+    """MIBŐL lett a forintos bevétel egy devizás munkán.
+
+    A bevétel mindenhol FORINT (kártyák, lista, profit) - ez a néhány mező
+    mondja meg, hogy az a forint miből jött, mert egy át NEM váltott összeg
+    ugyanúgy néz ki, mint egy szokásos forintos (lásd
+    models/project_code.bevetel_deviza)."""
+
+    penznem: str
+    netto: float
+    #: Hiányozhat: devizás munkánál árfolyam nélkül nincs forintos bevétel -
+    #: épp ezt az esetet kell kiírni, nem elrejteni.
+    arfolyam: float | None = None
+
+
+class HataridoAllas(BaseModel):
+    """MENNYI IDŐ van a kifizetésig - vagy mennyivel csúszott.
+
+    A `napok` előjele mindkét irányban ugyanazt jelenti: POZITÍV = jó irány
+    (van még idő / hamarabb fizettek), NEGATÍV = csúszás. Lásd
+    models/project_code.hatarido_allas."""
+
+    #: var | ma_jar_le | lejart | elore_fizetve | hatarido_napjan |
+    #: keson_fizetve | kifizetve
+    allapot: str
+    #: Hány nap. `None` a "kifizetve, de dátum nélkül" esetben: ott nincs mit
+    #: a határidőhöz mérni.
+    napok: int | None = None
+    hatarido: date
+    #: Melyik feltöltött számláról van szó - csak a `szamla_hataridok`
+    #: listában van kitöltve (lásd models/project_code.szamla_hataridok);
+    #: az egyetlen, "legsürgősebb" `hatarido_allas`-nál nincs rá szükség.
+    cimke: str | None = None
 
 
 class ProjectCodeCreate(ProjectCodeBase):
@@ -21,14 +74,232 @@ class ProjectCodeCreate(ProjectCodeBase):
 
 class ProjectCodeUpdate(BaseModel):
     esemeny_allapota: str | None = None
+    #: A vállalási ár és a pénzneme. Devizás pénznemhez KÖTELEZŐ az árfolyam
+    #: (lásd routes/project_codes._penznem_ellenorzese): a bevétel ezzel
+    #: átváltva, forintban kerül a Pénzügyekbe.
+    netto_osszeg: float | None = None
+    plusz_afa: str | None = None
+    penznem: str | None = None
+    arfolyam: float | None = None
+    #: MIÉRT ennyi az ár - szabad szöveg (pl. "beszámítva X fizetésébe").
+    vallalasi_ar_magyarazat: str | None = None
     contract_id: int | None = None
     tig_statusza: str | None = None
     szamla_statusza: str | None = None
+    megjegyzes: str | None = None
+    van_szerzodes: bool | None = None
+    papir_nelkul: bool | None = None
+    papir_nelkul_indoka: str | None = None
+
+
+class ProjectCodeListRead(BaseModel):
+    """A LISTA végpont szűkebb sémája - csak az, amit a listák valóban mutatnak.
+
+    A teljes ProjectCodeRead a Notionből örökölt ~80 további mezőt is viszi
+    (szerződés helye, megrendelő adószáma, tucatnyi formula-eredmény). Egy
+    listánál ezek egyike sem látszik, viszont 800 kódnál másfél megabájtnyi
+    adatot jelentenek: a szerver legyártja, a hálózat átviszi, a böngésző
+    értelmezi - mindezt semmiért. Az adatlap (GET /{id}) továbbra is a teljes
+    sémát adja, ott minden mező kell.
+    """
+
+    id: int
+    projektkod: str
+    project_nev: str | None = None
+    client_id: int | None = None
+    contract_id: int | None = None
+    helyszin: str | None = None
+    datum: date | None = None
+    datum_megjegyzes: str | None = None
+    esemeny_allapota: str | None = None
+    tig_statusza: str | None = None
+    szamla_statusza: str | None = None
+    megjegyzes: str | None = None
+
+    #: Számított értékek (lásd models/project_code.py).
+    bevetel: float
+    #: Devizás munkánál: miből lett a fenti forint (összeg + pénznem +
+    #: árfolyam). Forintos munkán None.
+    bevetel_deviza: BevetelDeviza | None = None
+    osszes_koltseg: float
+    becsult_profit: float
+    kulsos_koltseg: float
+    egyeb_kiadas: float
+    vagas_koltseg: float
+    belsos_munka_koltseg: float
+
+    #: Hol tart a papírozás és a pénz.
+    #: Elmaradt esemény: ehhez semmilyen papírt nem kérünk (lásd
+    #: models/project_code.esemeny_elmaradt).
+    elmaradt: bool = False
+    papir_kell: bool
+    keret_fedi: bool
+    keretszerzodes_neve: str | None = None
+    szerzodes_kell: bool
+    szerzodes_kesz: bool
+    tig_kesz: bool
+    #: KÉSZ, de nincs papírja: tudatosan kihagytuk. Külön a szerződésre és a
+    #: TIG-re, mert külön is szokás kihagyni őket (lásd
+    #: models/project_code.szerzodes_kihagyva).
+    szerzodes_kihagyva: bool = False
+    tig_kihagyva: bool = False
+    #: KÉSZNEK számít, de csak azért, mert ki van küldve - aláírva még nem
+    #: jött vissza (lásd models/project_code.szerzodes_kikuldve_varjuk).
+    szerzodes_kikuldve_varjuk: bool = False
+    tig_kikuldve_varjuk: bool = False
+    #: Lesz-e SZÁMLA erről a munkáról. Ahol nincs, ott a kihagyott szerződés
+    #: és TIG nem hiányosság, hanem következmény - nincs is mihez elkészíteni
+    #: őket (lásd services/megrendeloi_szamla.szamlat_varunk).
+    szamla_kell: bool = True
+    bevetel_kifizetve: bool
+    #: MENNYI IDŐ van a kifizetésig, vagy mennyivel csúszott, a
+    #: LEGSÜRGŐSEBB feltöltött számla szerint (lásd HataridoAllas). Fizetési
+    #: határidő nélkül None.
+    hatarido_allas: HataridoAllas | None = None
+    #: UGYANEZ, MINDEGYIK feltöltött számlához külön - osztott számlázásnál
+    #: (több számla egy projektkódon) ebből látszik mindegyik saját
+    #: állapota, nem csak a legsürgősebbé (lásd
+    #: models/project_code.szamla_hataridok).
+    szamla_hataridok: list[HataridoAllas] = []
+
+    van_szerzodes: bool = True
+    papir_nelkul: bool = False
+    papir_nelkul_indoka: str | None = None
+    #: MIÉRT ennyi az ár - a listán is kell: egy magyarázat nélküli 0 Ft ott a
+    #: legfélrevezetőbb (lásd models/project_code.vallalasi_ar_magyarazat).
+    vallalasi_ar_magyarazat: str | None = None
+
+    model_config = {"from_attributes": True}
 
 
 class ProjectCodeRead(ProjectCodeBase):
     id: int
+    #: Számított értékek (lásd models/project_code.py) - a lista ezekből
+    #: mutatja, hogy jött-e ki a projekt.
+    bevetel: float
+    #: Devizás munkánál: miből lett a fenti forint (lásd BevetelDeviza).
+    bevetel_deviza: BevetelDeviza | None = None
     osszes_koltseg: float
     becsult_profit: float
+    #: Az összes költség NÉGY része (az összegük pontosan az osszes_koltseg):
+    #: a külsős közreműködők kifizetései, minden más kiadás-sor, a vágás
+    #: (utómunka), és a belsősök napidíja. Az utóbbi az egyetlen, aminek nincs
+    #: Kiadás sora a Pénzügyekben - lásd services/belsos_koltseg.py.
+    kulsos_koltseg: float
+    egyeb_kiadas: float
+    vagas_koltseg: float
+    belsos_munka_koltseg: float
+
+    #: Hol tart a papírozás és a pénz (lásd models/project_code.py) - a lista
+    #: ebből mutatja, melyik projekten van már szerződés, hol van kész TIG, és
+    #: mit nem fizettek még ki.
+    #: Elmaradt esemény: ehhez semmilyen papírt nem kérünk (lásd
+    #: models/project_code.esemeny_elmaradt).
+    elmaradt: bool = False
+    papir_kell: bool
+    #: Fedi-e élő keretszerződés (ilyenkor eseti szerződés nem kell, csak TIG),
+    #: és KIVEL - egy puszta "keretszerződés alatt" nem ellenőrizhető.
+    keret_fedi: bool
+    keretszerzodes_neve: str | None = None
+    szerzodes_kell: bool
+    szerzodes_kesz: bool
+    tig_kesz: bool
+    #: KÉSZ, de nincs papírja: tudatosan kihagytuk (lásd
+    #: models/project_code.szerzodes_kihagyva).
+    szerzodes_kihagyva: bool = False
+    tig_kihagyva: bool = False
+    #: KÉSZNEK számít, de csak azért, mert ki van küldve - aláírva még nem
+    #: jött vissza (lásd models/project_code.szerzodes_kikuldve_varjuk).
+    szerzodes_kikuldve_varjuk: bool = False
+    tig_kikuldve_varjuk: bool = False
+    #: Lesz-e SZÁMLA erről a munkáról. Ahol nincs, ott a kihagyott szerződés
+    #: és TIG nem hiányosság, hanem következmény - nincs is mihez elkészíteni
+    #: őket (lásd services/megrendeloi_szamla.szamlat_varunk).
+    szamla_kell: bool = True
+    bevetel_kifizetve: bool
+    #: MENNYI IDŐ van a kifizetésig, vagy mennyivel csúszott, a
+    #: LEGSÜRGŐSEBB feltöltött számla szerint (lásd HataridoAllas). Fizetési
+    #: határidő nélkül None.
+    hatarido_allas: HataridoAllas | None = None
+    #: UGYANEZ, MINDEGYIK feltöltött számlához külön (lásd
+    #: models/project_code.szamla_hataridok).
+    szamla_hataridok: list[HataridoAllas] = []
+
+    # A papírozás kapcsolói (lásd models/project_code.py): van-e szerződés a
+    # projekt mögött, illetve papír nélkül számoljuk-e el.
+    van_szerzodes: bool = True
+    papir_nelkul: bool = False
+    papir_nelkul_indoka: str | None = None
+
+    # a 'HYPE ADMIN projektkódok' Notion tábla maradék mezői, egyenként (lásd
+    # app/models/project_code.py) - nem egy közös 'extra' JSON-ban.
+    teljesites_datum_formazva: str | None = None
+    netto_osszeg: float | None = None
+    megrendelo_szekhelye: str | None = None
+    profit_szazalek_notion: dict | list | float | str | None = None
+    geri_projekt: str | None = None
+    szerzodes_targya: str | None = None
+    keltezes_datum_formazva: str | None = None
+    gyartasi_koltseg_notion: dict | list | float | str | None = None
+    szerzodes_specialis_eset: str | None = None
+    fizetesi_hatarido: date | None = None
+    megrendelo_nyilvantartasi_szam: str | None = None
+    szerzodes_kuldes: bool = False
+    osszes_koltseg_notion: dict | list | float | str | None = None
+    tig_teljesitesi_ido: str | None = None
+    megrendelo_neve: str | None = None
+    osszesen_netto_notion: dict | list | float | str | None = None
+    megrendelo_adoszama: str | None = None
+    netto_notion: dict | list | float | str | None = None
+    helyszin: str | None = None
+    szerzodes_plusz_afa: str | None = None
+    tig_projektnev: str | None = None
+    specialis_eset: str | None = None
+    szerzodes_helye: str | None = None
+    szerzodes_netto_osszeg: float | None = None
+    megrendeloi_emailek: str | None = None
+    brutto_notion: dict | list | float | str | None = None
+    kulsos_notion_ids: dict | list | float | str | None = None
+    alvallalkozok_koltsege_notion: dict | list | float | str | None = None
+    darabolva: dict | list | float | str | None = None
+    vagasi_koltseg_notion: dict | list | float | str | None = None
+    project_nev: str | None = None
+    szerzodes_statusza: str | None = None
+    plusz_afa: str | None = None
+    megerte_e: dict | list | float | str | None = None
+    megrendelo_kepviseloje: str | None = None
+    szerzodes_projekt_nev: str | None = None
+    teljesites: str | None = None
+    tig_kikuldve: bool = False
+    adminisztracios_tablaban: str | None = None
+    tig_specialis: str | None = None
+    keltezes_datuma: date | None = None
+    lejart_notion: dict | list | float | str | None = None
+    megbizas_targya: str | None = None
+    belsos_koltseg_akkor: float | None = None
+    vallalasi_ar_notion: dict | list | float | str | None = None
+    tovabbi_dokumentumok: dict | list | float | str | None = None
+    utomunkak_notion: dict | list | float | str | None = None
+    bevetel_formaja: str | None = None
+    darabolas_notion_ids: dict | list | float | str | None = None
+    megrendelo_email: str | None = None
+    forintban_notion: dict | list | float | str | None = None
+    szerzodes_keltezes_datuma: date | None = None
+    belsos_koltseg_notion: dict | list | float | str | None = None
+    belso_plusz_koltseg_notion: dict | list | float | str | None = None
+    tig_url: str | None = None
 
     model_config = {"from_attributes": True}
+
+
+class ProjectCodeCommentCreate(BaseModel):
+    body: str
+
+
+class ProjectCodeCommentRead(BaseModel):
+    id: int
+    project_code_id: int
+    employee_id: int
+    employee_name: str
+    body: str
+    created_at: datetime

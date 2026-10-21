@@ -1,0 +1,336 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { ModalReteg } from "@/components/ModalReteg";
+import { authFetch } from "@/lib/authFetch";
+
+/** A három pontozott szempont. A sorrend a vágó gondolatmenetét követi: előbb
+ * azt, amit KAPOTT (nyersanyag), aztán ahogy fel volt véve (technika), végül
+ * ahogy meg volt komponálva (kreatív). */
+const SZEMPONTOK = [
+  {
+    kulcs: "nyersanyag_felhasznalhatosaga" as const,
+    cimke: "Nyersanyag felhasználhatósága",
+    leiras: "Mennyi használható anyag volt, elég fedés volt-e a vágáshoz.",
+  },
+  {
+    kulcs: "technikai_helyesseg" as const,
+    cimke: "Technikai helyesség",
+    leiras: "Fókusz, expozíció, hang, beállítások.",
+  },
+  {
+    kulcs: "kreativ_kepivilag" as const,
+    cimke: "Kreativitás és képi világ",
+    leiras: "Képkivágás, kompozíció, ötletesség.",
+  },
+];
+
+/** A kötelező megjegyzés legkisebb hossza, ahol a visszajelzés nem hagyható
+ * ki - a szerverrel azonos (services/deliverable_actions.MEGJEGYZES_MIN). */
+const MEGJEGYZES_MIN = 50;
+
+/** Hossz ÖSSZEVONT szóközökkel - a szóköz-nyomkodás nem számít bele. */
+function megjegyzesHossza(szoveg: string): number {
+  return szoveg.trim().split(/\s+/).filter(Boolean).join(" ").length;
+}
+
+type Pontok = Partial<Record<(typeof SZEMPONTOK)[number]["kulcs"], number>>;
+
+/** `sajat`: az anyag SAJÁT forgatása (közvetlenül ehhez a projekthez kötött) -
+ * csak ennek a stábja tiltja a visszajelzés kihagyását, a projektkód többi
+ * forgatásáé nem (egy kód akár egy hónapot is átölel). */
+type ForgatasStab = { forgatas: string | null; datum: string | null; nevek: string[]; sajat?: boolean };
+
+/** A vágói visszajelzés felugró űrlapja - ide szedve ki a FeedbackSendButton-
+ * ból, hogy máshonnan is nyitható legyen (lásd UtomunkaContent.kartyaAthelyezes:
+ * ha valaki visszajelzés nélkül próbál egy anyagot ellenőrzésbe tenni, EZ az
+ * űrlap nyílik meg a hiba-alert helyett, hogy rögtön ott pótolható legyen,
+ * amit a szerver hiányol).
+ *
+ * A NYITÁS/ZÁRÁS a hívóé (nincs saját `nyitva` state): a hívóhely dönti el,
+ * MIKOR kell megjelennie - egy gombnyomásra (FeedbackSendButton) vagy egy
+ * elutasított állapotváltás mellékhatásaként is. */
+export function VisszajelzesModal({
+  deliverableId,
+  onClose,
+  onSaved,
+  kihagyhato = false,
+}: {
+  deliverableId: number;
+  /** Bezárás mentés NÉLKÜL (Mégse, háttérre kattintás). */
+  onClose: () => void;
+  /** Sikeres mentés után - a hívó dönti el, mi történjen (pl. újra
+   * megpróbálni az elakadt állapotváltást). */
+  onSaved: () => void;
+  /** Az AUTOMATIKUSAN feldobott űrlap (elutasított állapotváltás után)
+   * kihagyható (a felhasználó kérése) - de csak indoklással: a "Kihagyom"
+   * szakasz ilyenkor jelenik meg. A kézzel nyitott űrlapon nincs mit
+   * kihagyni, ott a Mégse ugyanezt tudja. */
+  kihagyhato?: boolean;
+}) {
+  const router = useRouter();
+  const [pontok, setPontok] = useState<Pontok>({});
+  const [megjegyzes, setMegjegyzes] = useState("");
+  const [kihagyasIndok, setKihagyasIndok] = useState("");
+  const [busy, setBusy] = useState(false);
+  // KIK FORGATTAK az anyag projektjén (a felhasználó kérése) - a vágó lássa,
+  // kiknek szól a visszajelzés. Csendben marad üres, ha nincs stáb-adat.
+  const [stab, setStab] = useState<ForgatasStab[]>([]);
+  // Amíg a stáb nem töltődött be, a kihagyás sem kínálható fel: ha a
+  // forgatáson volt stáb, a visszajelzés NEM hagyható ki (lásd lent).
+  const [stabBetoltve, setStabBetoltve] = useState(false);
+
+  useEffect(() => {
+    let aktiv = true;
+    authFetch(`/api/v1/deliverables/${deliverableId}/forgatas-stab`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((adat: ForgatasStab[]) => {
+        if (aktiv) {
+          setStab(adat.filter((s) => s.nevek.length > 0));
+          setStabBetoltve(true);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      aktiv = false;
+    };
+  }, [deliverableId]);
+
+  // Csak az anyag SAJÁT forgatásának stábja tiltja a kihagyást - a szerver
+  // ugyanezt ellenőrzi (services/deliverable_actions.kihagyhato_a_visszajelzes).
+  const kihagyasTiltva = stab.some((s) => s.sajat && s.nevek.length > 0);
+
+  async function kuld(kihagyassal = false) {
+    if (kihagyassal) {
+      if (!kihagyasIndok.trim()) {
+        alert("A kihagyáshoz írd le, miért hagyod ki a visszajelzést.");
+        return;
+      }
+    } else {
+      const vanPont = SZEMPONTOK.some((sz) => pontok[sz.kulcs] != null);
+      if (!vanPont && !megjegyzes.trim()) {
+        alert("Adj legalább egy pontszámot, vagy írj megjegyzést.");
+        return;
+      }
+      if (kihagyasTiltva && megjegyzesHossza(megjegyzes) < MEGJEGYZES_MIN) {
+        alert(`Ehhez az anyaghoz a megjegyzés kötelező, legalább ${MEGJEGYZES_MIN} karakter.`);
+        return;
+      }
+    }
+    setBusy(true);
+    try {
+      const res = await authFetch(`/api/v1/deliverables/${deliverableId}/visszajelzes`, {
+        method: "POST",
+        body: JSON.stringify(
+          kihagyassal
+            ? { kihagyas_indoka: kihagyasIndok.trim() }
+            : {
+                nyersanyag_felhasznalhatosaga: pontok.nyersanyag_felhasznalhatosaga ?? null,
+                technikai_helyesseg: pontok.technikai_helyesseg ?? null,
+                kreativ_kepivilag: pontok.kreativ_kepivilag ?? null,
+                megjegyzes: megjegyzes.trim() || null,
+              },
+        ),
+      });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        alert(`Sikertelen küldés: ${detail?.detail ?? res.status}`);
+        return;
+      }
+      router.refresh();
+      onSaved();
+    } catch (err) {
+      alert(`Sikertelen küldés (hálózati hiba): ${err}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <ModalReteg onClose={busy ? undefined : onClose}>
+      <div
+        className="my-auto w-full max-w-xl rounded-[var(--radius)] border border-border bg-surface-2 p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="mb-1 text-[15px] font-medium text-text-primary">Vágói visszajelzés</h3>
+        <p className="mb-4 text-[12px] text-text-muted">
+          Milyen volt a leforgatott anyag? 1 = használhatatlan, 10 = kifogástalan.
+        </p>
+
+        {/* KIK FORGATTAK ezen a projekten - hogy a vágó tudja, kiknek szól a
+            visszajelzés (a felhasználó kérése). */}
+        {stab.length > 0 && (
+          <div className="mb-5 rounded-[var(--radius)] border border-border bg-surface-3 px-3 py-2.5">
+            <p className="mb-1.5 text-[12px] font-medium text-text-primary">Ezen a projekten forgattak</p>
+            <div className="space-y-1">
+              {stab.map((s, i) => (
+                <p key={i} className="text-[12.5px] text-text-secondary">
+                  {stab.length > 1 && (
+                    <span className="text-text-muted">
+                      {s.forgatas ?? "Forgatás"}
+                      {s.datum ? ` (${s.datum})` : ""}:{" "}
+                    </span>
+                  )}
+                  {s.nevek.join(", ")}
+                </p>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="space-y-5">
+          {SZEMPONTOK.map((sz) => (
+            <div key={sz.kulcs}>
+              <div className="mb-1.5 flex items-baseline justify-between gap-3">
+                <span className="text-[13px] text-text-primary">{sz.cimke}</span>
+                <span className="text-[13px] tabular-nums text-text-secondary">
+                  {pontok[sz.kulcs] != null ? `${pontok[sz.kulcs]} / 10` : "nincs pontozva"}
+                </span>
+              </div>
+              {/* Tíz gomb egymás mellett: egy kattintás az egész pontozás,
+                  nem kell csúszkát célozni vagy számot begépelni. */}
+              <div className="flex flex-wrap gap-1">
+                {Array.from({ length: 10 }, (_, i) => i + 1).map((ertek) => {
+                  const aktiv = pontok[sz.kulcs] === ertek;
+                  return (
+                    <button
+                      key={ertek}
+                      type="button"
+                      aria-label={`${sz.cimke}: ${ertek}`}
+                      onClick={() => setPontok((elozo) => ({ ...elozo, [sz.kulcs]: aktiv ? undefined : ertek }))}
+                      className={`h-8 w-8 rounded-[var(--radius)] border text-[12.5px] tabular-nums transition-colors ${
+                        aktiv
+                          ? "border-border-strong bg-bg-accent font-medium text-text-accent"
+                          : "border-border text-text-secondary hover:bg-surface-3"
+                      }`}
+                    >
+                      {ertek}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-1 text-[11px] text-text-muted">{sz.leiras}</p>
+            </div>
+          ))}
+
+          <div className="flex flex-col gap-1">
+            <label className="text-[13px] text-text-primary">
+              Megjegyzés
+              {kihagyasTiltva && <span className="text-text-danger"> *</span>}
+            </label>
+            <textarea
+              rows={5}
+              value={megjegyzes}
+              onChange={(e) => setMegjegyzes(e.target.value)}
+              placeholder="Egyéb meglátások – ez az a rész, ami a stábnak is kiküldhető."
+              className="w-full rounded-[var(--radius)] border border-border bg-surface-3 px-2 py-1.5 text-[13px] text-text-primary focus:outline-none"
+            />
+            {/* Ahol a visszajelzés nem hagyható ki (az anyag forgatásán stáb
+                dolgozott), a megjegyzés is kötelező, legalább 50 karakter (a
+                felhasználó kérése) - a számláló mutatja, mennyi van még hátra. */}
+            {kihagyasTiltva && (
+              <p
+                className={`text-[12px] ${
+                  megjegyzesHossza(megjegyzes) >= MEGJEGYZES_MIN ? "text-text-success" : "text-text-warning"
+                }`}
+              >
+                {megjegyzesHossza(megjegyzes) >= MEGJEGYZES_MIN
+                  ? `✓ ${megjegyzesHossza(megjegyzes)} karakter`
+                  : `Kötelező, legalább ${MEGJEGYZES_MIN} karakter – még ${MEGJEGYZES_MIN - megjegyzesHossza(megjegyzes)} hiányzik.`}
+              </p>
+            )}
+            <p className="text-[11px] text-text-muted">
+              A forgatás stábjának később CSAK ez a szöveg és a kész anyag linkje küldhető ki – a pontszámok belső
+              mérőszámok.
+            </p>
+          </div>
+        </div>
+
+        {/* KIHAGYÁS (a felhasználó kérése): az automatikusan feldobott űrlap
+            átugorható, de csak indoklással - az indok "kihagyva" jelöléssel a
+            visszajelzések közé kerül, és az állapotváltás így is folytatódik. */}
+        {/* Ha az anyag SAJÁT forgatásán STÁB dolgozott, a visszajelzés
+            nem hagyható ki (a felhasználó kérése) - nekik szól; ezt a szerver
+            is ellenőrzi (services/deliverable_actions.kihagyhato_a_visszajelzes).
+            Csak a saját forgatás számít, a projektkód többi forgatása nem. */}
+        {kihagyhato && kihagyasTiltva && (
+          <p className="mt-5 rounded-[var(--radius)] border border-border bg-surface-3 px-3 py-2.5 text-[12.5px] text-text-secondary">
+            Ez a visszajelzés nem hagyható ki: az anyag forgatásán stáb dolgozott, nekik szól.
+          </p>
+        )}
+        {kihagyhato && stabBetoltve && !kihagyasTiltva && (
+          <div className="mt-5 rounded-[var(--radius)] border border-border bg-surface-3 p-3">
+            <p className="mb-1.5 text-[13px] text-text-primary">Most nem írok visszajelzést</p>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+              <textarea
+                rows={2}
+                value={kihagyasIndok}
+                onChange={(e) => setKihagyasIndok(e.target.value)}
+                placeholder="Miért hagyod ki? (kötelező megindokolni)"
+                className="w-full flex-1 rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1.5 text-[13px] text-text-primary focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => void kuld(true)}
+                disabled={busy || !kihagyasIndok.trim()}
+                className="shrink-0 rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-2 disabled:opacity-50"
+              >
+                Kihagyom
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="mt-5 flex justify-end gap-3 border-t border-border pt-4">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+            className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3 disabled:opacity-50"
+          >
+            Mégse
+          </button>
+          <button
+            type="button"
+            onClick={() => void kuld()}
+            disabled={busy || (kihagyasTiltva && megjegyzesHossza(megjegyzes) < MEGJEGYZES_MIN)}
+            className="rounded-[var(--radius)] border border-border bg-bg-accent px-3 py-1.5 text-[13px] text-text-accent hover:opacity-90 disabled:opacity-50"
+          >
+            {busy ? "Küldés…" : "Küldés"}
+          </button>
+        </div>
+      </div>
+    </ModalReteg>
+  );
+}
+
+/** "Visszajelzés" gomb az utómunka oldalán: felugró űrlapot nyit, ahol a vágó
+ * 1-10-ig pontozza a három szempontot, és megjegyzést írhat.
+ *
+ * A küldés egy VÁGÓI VISSZAJELZÉS rekordot hoz létre (lásd backend
+ * routes/vagoi_visszajelzesek.py) - onnan lehet később kiküldeni a forgatás
+ * diszpó-levelére válaszként. */
+export function FeedbackSendButton({ deliverableId }: { deliverableId: number }) {
+  const [nyitva, setNyitva] = useState(false);
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setNyitva(true)}
+        className="rounded-[var(--radius)] bg-bg-accent px-3 py-1.5 text-[13px] font-medium text-text-accent hover:opacity-90"
+      >
+        Visszajelzés
+      </button>
+
+      {nyitva && (
+        <VisszajelzesModal
+          deliverableId={deliverableId}
+          onClose={() => setNyitva(false)}
+          onSaved={() => setNyitva(false)}
+        />
+      )}
+    </>
+  );
+}

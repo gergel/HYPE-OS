@@ -9,4 +9,5 @@ router = build_crud_router(
     read_schema=CallsheetRead,
     prefix="/callsheets",
     tags=["callsheets"],
+    page="/naptar",
 )

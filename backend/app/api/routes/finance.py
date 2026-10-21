@@ -1,5 +1,43 @@
+import io
+import zipfile
+from datetime import date
+from uuid import uuid4
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+from sqlalchemy import extract, func, select
+from sqlalchemy.orm import Session, selectinload
+
 from app.api.crud_router import build_crud_router
+from app.core.database import get_db
+from app.core.security import get_current_user, require_page_action
+from app.models.document_attachment import DocumentAttachment
+from app.models.employee import Employee
+from app.models.employee_monthly_item import EmployeeMonthlyItem
 from app.models.finance import Expense, KpForgalom, Revenue
+from app.models.internal_performance_certificate import (
+    KIHAGYVA,
+    InternalPerformanceCertificate,
+    InternalPerformanceCertificateInvoice,
+)
+from app.models.internal_performance_certificate import LEZART_ALLAPOTOK as BELSOS_TIG_LEZART
+from app.models.performance_certificate import (
+    PerformanceCertificate,
+    PerformanceCertificateInvoice,
+    PerformanceCertificateTetel,
+)
+from app.models.portal import Payment
+from app.models.project import Project
+from app.models.project_code import KIFIZETETT_STATUSZ_MINTA, ProjectCode
+from app.schemas.document_attachment import DocumentAttachmentRead
+from app.services import attachments, document_storage, elszamolas, fizetesi_mod, kiadas_kapcsolatok
+from app.services import hazipenztar_nullazas, kiadas_duplikacio, kifizetesre_varo
+from app.services import kassza as kassza_szolg
+from app.services import kintlevoseg as kintlevoseg_szolg
+from app.services import penznem as penznem_szolg
+from app.services.hu_datum import belsos_tig_honapja, ev_honap_szoveg
+from app.services.portal_storage import R2NotConfiguredError
 from app.schemas.finance import (
     ExpenseCreate,
     ExpenseRead,
@@ -12,6 +50,332 @@ from app.schemas.finance import (
     RevenueUpdate,
 )
 
+
+def _kiadas_torles_elott(expense: Expense, db: Session) -> None:
+    """Egy kiadás akkor is törölhető legyen, ha van hozzá kapcsolódó rekord.
+
+    A TIG "kifizetve" jelölése hozza létre ezt a sort, tehát a törlésének
+    éppen az a jelentése, hogy MÉGSEM fizettük ki - ilyenkor az érintett papír
+    visszakerül "nincs kifizetve" állapotba, és újra teendő lesz. Enélkül a
+    tévesen felvezetett kifizetés visszavonhatatlan volt: a kiadást a TIG
+    hivatkozása, a TIG-et pedig a kifizetettsége védte
+    (lásd services/kiadas_kapcsolatok.py).
+
+    Az ELLENKEZŐ irányú kapcsolatot is itt rendezzük: ha ez a kiadás volt az,
+    ami egy embert FORGATÁS NÉLKÜLI projektkódon alvállalkozóként megjelölt
+    (lásd _alvallalkozo_forgatas_kitoltese), a törlésével a hozzá tartozó
+    eseti szerződés és TIG is törlődik - különben azok magukra maradnának egy
+    olyan projektkódon, ahonnan az illető már el is tűnt (lásd
+    kiadas_kapcsolatok.torold_alvallalkozoi_papirokat_ha_utolso)."""
+    kiadas_kapcsolatok.bontsd_le_a_kapcsolatokat(expense, db)
+    kiadas_kapcsolatok.torold_alvallalkozoi_papirokat_ha_utolso(expense, db)
+
+
+def _devizat_forintra(adat: dict, db: Session) -> dict:
+    """Devizás felvezetés átváltása - a tárolt összeg mindig forint.
+
+    A felhasználó a saját pénznemében írja be az összeget; ha az nem forint,
+    az árfolyam kötelező. A `netto`/`brutto` mezőbe már a forint kerül, az
+    eredeti adat pedig megmarad (lásd services/penznem.py)."""
+    try:
+        return penznem_szolg.valtsd_at(adat)
+    except penznem_szolg.PenznemHiba as hiba:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(hiba)) from hiba
+
+
+def _devizat_forintra_frissiteskor(obj, adat: dict, db: Session, _current_user: Employee) -> None:
+    """Ugyanaz PATCH-nél. Csak akkor számol újra, ha a kérés hozza a pénznemet
+    - egy önmagában álló összeg-javítás forintos javítás marad."""
+    _devizat_forintra(adat, db)
+
+
+def _alvallalkozo_forgatas_kitoltese(adat: dict, db: Session) -> dict:
+    """Alvállalkozói kiadásnál (employee_id kitöltve) NEM kötelező kiválasztani,
+    melyik konkrét forgatáshoz (alvallalkozo_project_id) tartozik - elég a
+    projektkódhoz hozzáadni: aki kap egy embert a kiadáson, AUTOMATIKUSAN
+    bekerül az Utókövetésbe, hogy hozzá szerződés és TIG is készüljön, amíg
+    ember nélkül minden marad a régiben (sima kiadás, nincs vele más teendő).
+
+    Ha a projektkódhoz VAN forgatás, a hozzárendelés a legfrissebbet választja,
+    ha a felhasználó nem adott meg konkrétat - a pontos forgatás csak azt
+    dönti el, HOL jelenik meg az Utókövetésben (lásd models/project.py
+    Project.alvallalkozo_stab), magát a szerződés/TIG-igényt nem befolyásolja.
+
+    Ha a projektkódhoz NINCS forgatás (tisztán ügynökségi feladat - pl.
+    tanácsadás, kampánymenedzsment -, amit nem forgatással látunk el), a mező
+    üresen marad: NEM hozunk létre hozzá egy "helyettesítő" Project sort. Az
+    Utókövetés ilyenkor közvetlenül a PROJEKTKÓDHOZ köti a szerződést/TIG-et
+    (lásd models/project_code.py ProjectCode.alvallalkozo_stab_forgatas_nelkul
+    és api/routes/subcontractor_contracts.py "projektkód-szintű ág")."""
+    if adat.get("employee_id") and not adat.get("alvallalkozo_project_id") and adat.get("project_code_id"):
+        legfrissebb = db.scalar(
+            select(Project.id)
+            .where(Project.project_code_id == adat["project_code_id"])
+            .order_by(Project.forgatas_datuma.desc().nulls_last(), Project.id.desc())
+            .limit(1)
+        )
+        if legfrissebb is not None:
+            adat["alvallalkozo_project_id"] = legfrissebb
+    return adat
+
+
+def _plusz_afa_jelolt(ertek) -> bool:
+    """Ugyanaz az értelmezés, mint az autós költéseknél (routes/autok.py): a
+    Notionből örökölt szöveges "+ÁFA" mező igen-változatai számítanak."""
+    return str(ertek or "").strip().lower() in ("igen", "true", "+afa", "+áfa")
+
+
+#: A felület ÁFA-választójának „Egyéni ÁFA összeg" értéke: nem százalékot ad
+#: meg a felhasználó, hanem a számlán szereplő ÁFA konkrét összegét.
+EGYENI_AFA = "egyeni"
+
+
+def _afa_brutto(
+    adat: dict, *, netto=None, plusz_afa=None, afa_szazalek=None, egyeni_afa=None
+) -> None:
+    """Bruttó a nettóból: "+ÁFA" jelöléssel netto * (1 + százalék/100), ÁFA
+    nélkül a bruttó maga a nettó (a kettő ilyenkor ugyanaz az összeg).
+
+    EGYÉNI ÁFA-ÖSSZEG (a felhasználó kérése): az ÁFA-választó „Egyéni ÁFA
+    összeg" értékénél (`plusz_afa="egyeni"`) a felhasználó a számlán szereplő
+    ÁFA konkrét összegét adja meg (`egyeni_afa_osszege`), nem százalékot - pl.
+    vegyes kulcsú vagy kerekítéssel eltérő számlánál. Ilyenkor bruttó = nettó +
+    az ÁFA összege, pontosan. A sor "+ÁFA"-ként ("igen") tárolódik, hogy minden
+    más kimutatás ugyanúgy ÁFÁ-snak lássa, a százalék pedig tájékoztató (az
+    összegből visszaszámolva). Ha később valaki százalékot ad meg, vagy "Nincs
+    ÁFA"-ra vált, az egyéni összeg törlődik - különben csendben felülírná.
+
+    Csak akkor számolunk, ha a kérés NEM hozott kifejezett bruttót - egy
+    kézzel beírt bruttó (pl. a táblázat cellájából) mindig nyer. Százalék
+    nélkül 27-tel számolunk (az általános kulcs). A hívó a PATCH-nél a meglévő
+    rekord értékeit adja át alapnak, hogy egy önmagában érkező nettó-javítás
+    is újraszámolja a bruttót."""
+    if str(adat.get("plusz_afa") or "").strip().lower() == EGYENI_AFA:
+        if adat.get("egyeni_afa_osszege") is None and egyeni_afa is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Egyéni ÁFA-nál add meg az ÁFA összegét.",
+            )
+        if adat.get("egyeni_afa_osszege") is not None and float(adat["egyeni_afa_osszege"]) < 0:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Az ÁFA összege nem lehet negatív.")
+        adat["plusz_afa"] = "igen"
+    elif "plusz_afa" in adat and not _plusz_afa_jelolt(adat["plusz_afa"]):
+        adat["egyeni_afa_osszege"] = None  # "Nincs ÁFA"
+    elif "afa_szazalek" in adat and "egyeni_afa_osszege" not in adat:
+        adat["egyeni_afa_osszege"] = None  # százalékos ÁFA-ra váltott
+    if adat.get("brutto") is not None:
+        return
+    netto = adat.get("netto", netto)
+    plusz_afa = adat.get("plusz_afa", plusz_afa)
+    if netto is None:
+        return
+    if not _plusz_afa_jelolt(plusz_afa):
+        adat["brutto"] = round(float(netto), 2)
+        return
+    egyeni = adat.get("egyeni_afa_osszege", egyeni_afa)
+    if egyeni is not None:
+        adat["brutto"] = round(float(netto) + float(egyeni), 2)
+        # Tájékoztató százalék (a mező 5,2 pontosságú - irreális aránynál üres).
+        arany = float(egyeni) / float(netto) * 100 if float(netto) else None
+        adat["afa_szazalek"] = round(arany, 2) if arany is not None and arany < 1000 else None
+        return
+    szazalek = adat.get("afa_szazalek", afa_szazalek)
+    szazalek = float(szazalek) if szazalek is not None else 27.0
+    adat["brutto"] = round(float(netto) * (1 + szazalek / 100), 2)
+
+
+def _fedezet_es_nincs_szamla(adat: dict, obj=None) -> None:
+    """A házipénztár-FEDEZET mögött van számla, ezért nem lehet egyszerre
+    „sosem lesz számlája” is. Felvitelkor ez hiba; szerkesztéskor az újonnan
+    bekapcsolt jelölés kikapcsolja a másikat (a táblázat kapcsolói így
+    egy kattintással átválthatók)."""
+    if obj is None:
+        if adat.get("kp_fedezet") and adat.get("nincs_szamla"):
+            raise HTTPException(
+                status_code=400,
+                detail="A fedezet mögött van számla - nem lehet egyszerre „sosem lesz számlája” is.",
+            )
+        return
+    if adat.get("kp_fedezet") and "nincs_szamla" not in adat and obj.nincs_szamla:
+        adat["nincs_szamla"] = False
+    elif adat.get("nincs_szamla") and "kp_fedezet" not in adat and obj.kp_fedezet:
+        adat["kp_fedezet"] = False
+    elif adat.get("kp_fedezet") and adat.get("nincs_szamla"):
+        raise HTTPException(
+            status_code=400,
+            detail="A fedezet mögött van számla - nem lehet egyszerre „sosem lesz számlája” is.",
+        )
+
+
+def _projektkodos_kifizetettnek_veheto(adat: dict) -> bool:
+    """PROJEKTKÓDHOZ felvezetett, dátummal megadott kiadás KIFIZETETT (a
+    felhasználó kérése) - akkor is, ha "Külsős" a besorolása.
+
+    Kivétel az ALVÁLLALKOZÓS kiadás (van kiválasztott ember): annak a
+    kifizetése a TIG-jén megy (Utókövetés -> számla -> "Kifizetve"), és az
+    Utókövetés a TIG saját jelzőjéből látja, ki van-e fizetve. Ha itt
+    kifizetettnek vennénk, a TIG továbbra is kifizetésre várna - kétszeri
+    utalás veszélye. Kifejezetten megadott kesz (pl. "nincs kifizetve") is
+    nyer."""
+    return (
+        _id_vagy_none(adat.get("project_code_id")) is not None
+        and bool(adat.get("fizetes_datuma"))
+        and adat.get("kesz") in (None, "")
+        and _id_vagy_none(adat.get("employee_id")) is None
+    )
+
+
+def _expense_before_create(adat: dict, db: Session) -> dict:
+    _fedezet_es_nincs_szamla(adat)
+    # EGYÉB (nem külsős) kiadás megadott dátummal: ezek mindig már KIFIZETETT
+    # tételek (a felhasználó kérése), ezért rögtön kifizetettként (kesz=True)
+    # vezetjük fel - így a megadott fizetés dátumával automatikusan bekerülnek
+    # a kiadások közé. A külsős tételek ezt NEM kapják: azok az utalás-
+    # felvezetésen mennek át, ott áll be a kifizetés.
+    tipus = (adat.get("tipus") or "").strip().lower()
+    if tipus == "egyeb" and adat.get("fizetes_datuma") and not adat.get("kesz"):
+        adat["kesz"] = True
+    # KÉSZPÉNZES kiadás dátummal: a pénz abban a pillanatban kiment a
+    # házipénztárból - nincs "utalásra vár" állapota (lásd services/kassza.py).
+    if fizetesi_mod.keszpenzes(adat.get("kifizetes_modja")) and adat.get("fizetes_datuma") and not adat.get("kesz"):
+        adat["kesz"] = True
+    # PROJEKTKÓDHOZ felvezetett kiadás dátummal (a felhasználó kérése): a
+    # megadott dátum a kifizetésé, tehát kifizetett - a "Külsős" besorolású is.
+    if _projektkodos_kifizetettnek_veheto(adat):
+        adat["kesz"] = True
+    if adat.get("kesz") is None:
+        adat["kesz"] = False
+    # Az ÁFA-számítás a deviza-átváltás ELŐTT fut: a bruttó még az eredeti
+    # pénznemben számolódik ki, és az átváltás azt is forintosítja.
+    _afa_brutto(adat)
+    adat = _devizat_forintra(adat, db)
+    _egyeni_afa_forintra(adat)
+    # LEHETSÉGES DUPLIKÁCIÓ (ugyanaz a dátum, összeg, cég): a forintosított
+    # összegekkel ellenőrzünk, ahogy elmentenénk - lásd services/kiadas_duplikacio.py.
+    kiadas_duplikacio.ellenoriz(db, adat)
+    return _alvallalkozo_forgatas_kitoltese(adat, db)
+
+
+def _egyeni_afa_forintra(adat: dict) -> None:
+    """Devizás felvezetésnél az egyéni ÁFA-összeg is az eredeti pénznemben jött
+    - a sor összegei forintban tárolódnak, ezért ezt is átváltjuk (a bruttót a
+    nettóval együtt már a deviza-átváltás forintosította)."""
+    if adat.get("eredeti_penznem") and adat.get("egyeni_afa_osszege") is not None and adat.get("arfolyam"):
+        adat["egyeni_afa_osszege"] = penznem_szolg.forintra(adat["egyeni_afa_osszege"], adat["arfolyam"])
+
+
+def _id_vagy_none(ertek) -> int | None:
+    """Egy PATCH-ben érkező azonosító (szám, szöveg vagy üres) összehasonlítható
+    alakra: az üres szöveg és a null egyaránt "nincs"."""
+    if ertek is None or ertek == "":
+        return None
+    try:
+        return int(ertek)
+    except (TypeError, ValueError):
+        return None
+
+
+def _papirbol_keletkezett_kiadas(db: Session, expense_id: int) -> bool:
+    """A kiadás egy külsős/belsős TIG-ből vagy havi tételből keletkezett-e -
+    ezeknek a kifizetése a saját papírjukon (TIG "Kifizetve") történik."""
+    from app.models.employee_monthly_item import EmployeeMonthlyItem
+    from app.models.internal_performance_certificate import InternalPerformanceCertificate
+    from app.models.performance_certificate import PerformanceCertificate
+
+    return any(
+        db.scalar(select(m.id).where(m.expense_id == expense_id).limit(1)) is not None
+        for m in (PerformanceCertificate, InternalPerformanceCertificate, EmployeeMonthlyItem)
+    )
+
+
+def _expense_before_update(obj, adat: dict, db: Session, _current_user: Employee) -> None:
+    """PATCH-nél a hiányzó alapokat a meglévő rekordból vesszük: egy
+    önmagában érkező nettó- vagy százalék-javítás is újraszámolja a bruttót,
+    ha a soron "+ÁFA" van jelölve."""
+    _fedezet_es_nincs_szamla(adat, obj)
+    # UTÓLAG MEGADOTT ÁFA % (a felhasználó hibajelzése): a "Nincs ÁFA"-val
+    # felvitt kiadásnál (pl. projektkódról) az adatlapon csak az "ÁFA %" mező
+    # szerkeszthető, és az önmagában érkezett. A sor jelölése nélkül a bruttó
+    # a nettó maradt - a megadott (0-nál nagyobb) százalék maga a "+ÁFA"
+    # szándék, ezért a sort annak jelöljük, és a bruttó újraszámolódik.
+    if (
+        adat.get("afa_szazalek") not in (None, "")
+        and "plusz_afa" not in adat
+        and "brutto" not in adat
+        and float(adat["afa_szazalek"]) > 0
+        and not _plusz_afa_jelolt(obj.plusz_afa)
+    ):
+        adat["plusz_afa"] = "igen"
+    if any(mezo in adat for mezo in ("netto", "plusz_afa", "afa_szazalek", "egyeni_afa_osszege")):
+        _afa_brutto(
+            adat, netto=obj.netto, plusz_afa=obj.plusz_afa, afa_szazalek=obj.afa_szazalek,
+            egyeni_afa=obj.egyeni_afa_osszege,
+        )
+    _devizat_forintra_frissiteskor(obj, adat, db, _current_user)
+    _egyeni_afa_forintra(adat)
+    # A PROJEKTKÓD vagy az ALVÁLLALKOZÓ LEVÉTELE / CSERÉJE (a felhasználó
+    # kérése): a konkrét forgatás-hozzárendelés (alvallalkozo_project_id) a
+    # régi projektkód egyik forgatására és a régi emberre szólt. Ha bent
+    # maradna, a levett ember továbbra is ott állna annak a forgatásnak az
+    # Utókövetésében (szerződés/TIG-teendőként), ezért kinullázzuk - alább,
+    # ha továbbra is van ember és projektkód, újra kitöltődik az újhoz.
+    projektkod_valtozik = "project_code_id" in adat and _id_vagy_none(adat["project_code_id"]) != obj.project_code_id
+    ember_valtozik = "employee_id" in adat and _id_vagy_none(adat["employee_id"]) != obj.employee_id
+    if (projektkod_valtozik or ember_valtozik) and "alvallalkozo_project_id" not in adat:
+        adat["alvallalkozo_project_id"] = None
+        obj.alvallalkozo_project_id = None
+    # A KIADÁSOK KÖZÖTT MÁR SZEREPLŐ tétel (van fizetés dátuma) projektkódhoz
+    # rendelése (a felhasználó kérése): ami a Kiadások közé fel van vezetve,
+    # az már ki van fizetve - a projektkódon se "Fizetés" gombbal, nyitottként
+    # jelenjen meg. Kimarad a TIG-ből/havi elszámolásból keletkezett sor (azt a
+    # saját papírja fizeti ki) és a készpénzes (az a házipénztárat mozgatná).
+    # UTÓLAG MEGADOTT DÁTUM projektkódos kiadáson (a felhasználó kérése): a
+    # dátum a kifizetésé, tehát kifizetett - ugyanaz, mint felvitelkor (lásd
+    # _projektkodos_kifizetettnek_veheto). Kimarad a készpénzes (az a
+    # házipénztárat mozgatná) és a TIG-ből/havi elszámolásból keletkezett sor.
+    if (
+        adat.get("fizetes_datuma")
+        and obj.fizetes_datuma is None
+        and not obj.kesz
+        and "kesz" not in adat
+        and _projektkodos_kifizetettnek_veheto(
+            {
+                "project_code_id": adat.get("project_code_id", obj.project_code_id),
+                "fizetes_datuma": adat["fizetes_datuma"],
+                "employee_id": adat.get("employee_id", obj.employee_id),
+            }
+        )
+        and not fizetesi_mod.keszpenzes(adat.get("kifizetes_modja", obj.kifizetes_modja))
+        and not _papirbol_keletkezett_kiadas(db, obj.id)
+    ):
+        adat["kesz"] = True
+    if (
+        projektkod_valtozik
+        and _id_vagy_none(adat["project_code_id"]) is not None
+        and "kesz" not in adat
+        and not obj.kesz
+        and (adat.get("fizetes_datuma", obj.fizetes_datuma) is not None)
+        and not fizetesi_mod.keszpenzes(adat.get("kifizetes_modja", obj.kifizetes_modja))
+        and not _papirbol_keletkezett_kiadas(db, obj.id)
+    ):
+        adat["kesz"] = True
+    # UTÓLAG alvállalkozóivá váló kiadás (a felhasználó hibajelzése nyomán):
+    # ha egy meglévő soron kap embert vagy vált "külsős" besorolásra, ugyanaz
+    # a forgatás-hozzárendelés jár neki, mint felvitelkor - enélkül a
+    # projektkód forgatásai mellett is a forgatás nélküli ágra került volna.
+    if ("employee_id" in adat or "tipus" in adat or "project_code_id" in adat) and not obj.alvallalkozo_project_id:
+        osszevonva = {
+            "employee_id": _id_vagy_none(adat.get("employee_id", obj.employee_id)),
+            "tipus": adat.get("tipus", obj.tipus),
+            "project_code_id": _id_vagy_none(adat.get("project_code_id", obj.project_code_id)),
+            "alvallalkozo_project_id": adat.get("alvallalkozo_project_id"),
+        }
+        if (osszevonva["tipus"] or "").strip().lower() == "kulsos":
+            _alvallalkozo_forgatas_kitoltese(osszevonva, db)
+            if osszevonva["alvallalkozo_project_id"] is not None:
+                adat["alvallalkozo_project_id"] = osszevonva["alvallalkozo_project_id"]
+
+
 expenses_router = build_crud_router(
     model=Expense,
     create_schema=ExpenseCreate,
@@ -19,7 +383,61 @@ expenses_router = build_crud_router(
     read_schema=ExpenseRead,
     prefix="/expenses",
     tags=["finance"],
+    page="/penzugyek",
+    before_create=_expense_before_create,
+    before_update=_expense_before_update,
+    before_delete=_kiadas_torles_elott,
 )
+
+@expenses_router.post("/kiolvasas")
+async def kiadas_kiolvasas_dokumentumbol(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action("/penzugyek", "create")),
+):
+    """Kiadás-mezők KIOLVASÁSA feltöltött szerződésből/számlából (a felhasználó
+    kérése) - a válasz a kiadás-űrlap mezőnevein kulcsolt előtöltés (cégnév,
+    megnevezés, nettó, ÁFA, pénznem, dátum), amit a felület az űrlapba tölt.
+    A kiolvasott partnert a MEGLÉVŐ alvállalkozók közt is megkeresi
+    (employee_id + alvallalkozo a válaszban); ha nincs meg, a felvételhez
+    előtöltő adatcsomagot ad (alvallalkozo_adatok - a felhasználó kérése:
+    ilyenkor fel lehessen venni, csak a hiányzókra rákérdezve). Semmit nem
+    ment: a felhasználó ellenőrzi és a megszokott úton menti."""
+    from app.services import kiadas_kiolvasas
+
+    mime = (file.content_type or "").lower()
+    if mime not in kiadas_kiolvasas.ENGEDETT_MIME:
+        raise HTTPException(status_code=400, detail="PDF-et vagy fotót (JPG/PNG) tölts fel.")
+    adat = await file.read()
+    if len(adat) > kiadas_kiolvasas.MAX_MERET:
+        raise HTTPException(status_code=400, detail="A fájl túl nagy a kiolvasáshoz (max. 20 MB).")
+    try:
+        adatok = kiadas_kiolvasas.olvasd_ki(adat, mime)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    kiadas_kiolvasas.kifizetettseg_javaslat(adatok)
+    meglevo = kiadas_kiolvasas.alvallalkozo_egyeztetes(db, adatok)
+    if meglevo is not None:
+        adatok["employee_id"] = meglevo.id
+        adatok["alvallalkozo"] = {"id": meglevo.id, "full_name": meglevo.full_name}
+    elif adatok.get("megnevezes") or adatok.get("kepviselo"):
+        # Nincs ilyen alvállalkozó - a felület ebből tölti elő az "Új
+        # alvállalkozó" ablakot (a mezőnevek az UjAlvallalkozoDialog-éi).
+        adatok["alvallalkozo_adatok"] = {
+            "full_name": adatok.get("kepviselo") or adatok.get("megnevezes") or "",
+            "vallakozas_neve": adatok.get("megnevezes") or "",
+            "vallakozas_szekhely": adatok.get("szekhely") or "",
+            "vallalkozas_adoszama": adatok.get("adoszam") or "",
+            "nyilvantartasi_szam": adatok.get("nyilvantartasi_szam") or "",
+            "vallalkozas_kepviselo": adatok.get("kepviselo") or "",
+            "megbizas_targya": adatok.get("kiadas_leiras") or "",
+            "email": adatok.get("email") or "",
+            "telefon": adatok.get("telefon") or "",
+            "plusz_afa": adatok.get("plusz_afa") == "igen",
+        }
+    return adatok
+
 
 revenues_router = build_crud_router(
     model=Revenue,
@@ -28,7 +446,73 @@ revenues_router = build_crud_router(
     read_schema=RevenueRead,
     prefix="/revenues",
     tags=["finance"],
+    page="/penzugyek",
+    before_create=_devizat_forintra,
+    before_update=_devizat_forintra_frissiteskor,
 )
+
+def _kp_forgalom_devizat_forintra(adat: dict, db: Session) -> dict:
+    """Devizás felvezetés a KP forgalom soron - ugyanaz a szabály, mint a
+    Kiadásnál/Bevételnél (lásd _devizat_forintra), csak a mezőneve `osszeg`,
+    nem `netto`/`brutto`."""
+    try:
+        return penznem_szolg.valtsd_at(adat, mezok=("osszeg",))
+    except penznem_szolg.PenznemHiba as hiba:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(hiba)) from hiba
+
+
+def _kp_forgalom_osszeg_elojel_nelkul(adat: dict) -> None:
+    """A "Forintban" mező mindig ELŐJEL NÉLKÜLI (az irányt a Típus/`forgalom`
+    mező adja, lásd models/finance.KpForgalom.forintban) - védekezésből, ha
+    valaki mégis negatívot írna be."""
+    if adat.get("osszeg") is not None:
+        adat["osszeg"] = abs(float(adat["osszeg"]))
+
+
+def _kp_forgalom_before_create(adat: dict, db: Session) -> dict:
+    """A házipénztár `kp_forgalmak` sora ÁTVEZETÉS (ATM-felvétel, lásd
+    services/kassza.py). KIADÁS-SOR NEM KELETKEZIK hozzá (a felhasználó
+    2026-09-24-i döntése): a házipénztár nő, a bankszámla egyenlege csökken
+    (lásd FinanceSummary.szamla_egyenleg), de ez nem költés. Korábban egy
+    "Bankkártya" kiadás-sor is létrejött mellé - ez szűnt meg."""
+    _kp_forgalom_devizat_forintra(adat, db)
+    _kp_forgalom_osszeg_elojel_nelkul(adat)
+    if not adat.get("forgalom"):
+        adat["forgalom"] = "atvezetes"
+    return adat
+
+
+def _kp_forgalom_kezi_javitas(obj: KpForgalom, adat: dict, db: Session, current_user: Employee) -> None:
+    """Kézzel átírt összeg/irány FÉLRETESZI a Notion formula-értékét, és
+    átváltja a devizás felvezetést forintra.
+
+    A KP forgalom soroknál az irányt az importált "Forintban" mező ELŐJELE
+    hordozza (lásd models/finance.KpForgalom.forintban) - ez azért kell, mert
+    az "Összeg" oszlop előjel nélküli. Csakhogy amíg ez a mező megvan, ERŐSEBB
+    a kézzel beírt összegnél: valaki átírná a 600 000-et 500 000-re, és a
+    felületen nem történne semmi, mert a régi formula-érték tovább számolna.
+
+    Ezért ha a szerkesztés az ÖSSZEGET vagy az IRÁNYT érinti, az importált
+    értéket töröljük: innentől az számít, amit beírtak. Az irányt onnantól a
+    `forgalom` mező mondja meg.
+
+    És mielőtt töröljük, az EDDIGI IRÁNYT rögzítjük a `forgalom` mezőbe, ha az
+    üres volt - különben egy puszta összeg-javítás átfordítaná a sort kiadásból
+    bevételbe (az előjel a törléssel elveszne), és ezt senki nem kérte."""
+    _kp_forgalom_devizat_forintra(adat, db)
+    if "osszeg" not in adat and "forgalom" not in adat:
+        return
+    if "forgalom" not in adat and not obj.forgalom:
+        adat["forgalom"] = "kiadas" if obj.kiadas_e else "bevetel"
+    _kp_forgalom_osszeg_elojel_nelkul(adat)
+    adat["forintban_notion"] = None
+
+
+def _kp_forgalom_kezdonap_ota(stmt, db: Session, _user: Employee):
+    """A 2026.01.01 előtti KP forgalom sorok nem léteznek (lásd
+    services/kassza.KP_KEZDET) - a listában sem, egyenként lekérve sem."""
+    return stmt.where(kassza_szolg.kp_ervenyes_sql())
+
 
 kp_forgalom_router = build_crud_router(
     model=KpForgalom,
@@ -37,4 +521,1465 @@ kp_forgalom_router = build_crud_router(
     read_schema=KpForgalomRead,
     prefix="/kp-forgalom",
     tags=["finance"],
+    page="/penzugyek",
+    before_create=_kp_forgalom_before_create,
+    before_update=_kp_forgalom_kezi_javitas,
+    sor_szuro=_kp_forgalom_kezdonap_ota,
 )
+
+summary_router = APIRouter(prefix="/finance", tags=["finance"])
+
+PENZUGY_PAGE = "/penzugyek"
+
+
+class MonthlyFinance(BaseModel):
+    month: str
+    bevetel: float
+    kiadas: float
+
+
+class OutstandingInvoice(BaseModel):
+    nev: str
+    url: str | None
+    netto: float | None
+    fizetesi_hatarido: date | None
+
+
+class OutstandingProject(BaseModel):
+    """Egy ki nem fizetett projektkód - lásd services/kintlevoseg.py."""
+
+    project_code_id: int
+    projektkod: str
+    #: A munka NEVE (nem az ügyfélé). A régi, Notionból importált kódok
+    #: többségénél az ügyfél "Ismeretlen ügyfél (Notion import)" - abból a
+    #: listából nem derült ki, MI az a tétel; a projekt nevéből igen.
+    projekt_nev: str | None
+    megrendelo: str | None = None
+    #: szamlazando (még nincs számla) | szamla_kint (kiállítva, nem fizették)
+    #: | szamla_nelkul (számla nem lesz, de a rendezés nincs lezárva)
+    allapot: str
+    #: Nettó, forintban. None: nincs megadva a vállalási ár (az is teendő).
+    kintlevo_osszeg: float | None
+    esemeny_datuma: date | None = None
+    esemeny_jovobeli: bool = False
+    #: nem_kell | tig_kesz | tig_hianyzik | szerzodes_hianyzik
+    papir: str | None = None
+    szamlak: list[OutstandingInvoice] = []
+    regi_szamla_url: str | None = None
+    legkorabbi_hatarido: date | None
+    hatarido_napok: int | None = None
+    lejart: bool
+    hatarido_hianyzik: bool = False
+    megjegyzes: str | None = None
+
+
+class PaymentMethodBreakdown(BaseModel):
+    kifizetes_modja: str | None
+    osszeg: float
+
+
+class KasszaHavi(BaseModel):
+    """Egy hónap készpénz-mozgása és a hónap végi egyenleg."""
+
+    month: str
+    be: float
+    ki: float
+    #: A hónap VÉGÉN mennyi volt a kasszában (a nyitó egyenleggel együtt).
+    egyenleg: float
+
+
+class Kassza(BaseModel):
+    """Mennyi készpénz van a HÁZIPÉNZTÁRBAN (lásd services/kassza.py).
+
+    BRUTTÓBAN, nem nettóban: a dobozban fizikailag annyi pénz van, amennyit
+    kifizettünk/megkaptunk, ÁFÁ-stól."""
+
+    egyenleg: float
+    #: A kezdőnap (2026.01.01) óta bejött/kiment készpénz.
+    osszes_be: float
+    osszes_ki: float
+    #: Az idei év mozgása külön.
+    idei_be: float
+    idei_ki: float
+    #: Az idei mozgás a négy fajta szerint (lásd services/kassza.py).
+    idei_bevetel: float = 0
+    idei_bevetel_db: int = 0
+    #: Az idei ATM-felvétel (bankszámla -> házipénztár átvezetés), nettó hatás.
+    idei_atvezetes: float = 0
+    idei_atvezetes_db: int = 0
+    idei_sima_kiadas: float = 0
+    idei_sima_kiadas_db: int = 0
+    idei_fekete_kiadas: float = 0
+    idei_fekete_kiadas_db: int = 0
+    havi: list[KasszaHavi]
+
+class FinanceSummary(BaseModel):
+    """Az összesítő számai NETTÓBAN értendők (lásd services/elszamolas.py):
+    az ÁFA átfolyó tétel, két oldal bruttó összevetéséből nem profit jön ki,
+    hanem az ÁFA-tartalmak különbsége.
+
+    A bruttó ettől még látszik - de külön, `_brutto` végű mezőkben, mert arra
+    is szükség van: az megy ki (és jön be) a bankszámlán."""
+
+    ytd_bevetel: float
+    ytd_kiadas: float
+    #: A régi "Profit (idén)" helyett KÉT egyenleg (a felhasználó kérése):
+    #: - KP egyenleg: a kassza egyenlege a KP forgalomból (lásd
+    #:   services/kassza.py, 2026.01.01 óta) - ugyanaz, mint `kassza.egyenleg`;
+    #: - SZÁMLA egyenleg: az idei, BANKSZÁMLÁN mozgott pénz egyenlege, NETTÓBAN
+    #:   (a felhasználó kérése - ugyanúgy, mint az éves bevétel/kiadás, hogy
+    #:   az ÁFA ne torzítsa): a nem készpénzes bevétel mínusz a nem
+    #:   készpénzes kiadás, mínusz az ATM-ről a kasszába átvezetett készpénz.
+    #:   Nyitó egyenleg nélkül - az idei mozgás mérlege, nem a banki kivonat.
+    kp_egyenleg: float
+    szamla_egyenleg: float
+    szamla_be: float
+    szamla_ki: float
+    #: Ebből a kasszába átvezetett ATM-felvétel (a `szamla_ki` része).
+    szamla_atvezetes: float
+    #: Ugyanaz az időszak bruttóban - tájékoztatásul, a tényleges pénzmozgás.
+    ytd_bevetel_brutto: float
+    ytd_kiadas_brutto: float
+    osszes_kintlevoseg: float
+    kintlevo_projektek_szama: int
+    #: A kintlévőségek bontása: hová kell még számla, és hol van kint.
+    szamlazando_db: int = 0
+    szamlazando_osszeg: float = 0
+    szamla_kint_db: int = 0
+    szamla_kint_osszeg: float = 0
+    szamla_nelkul_db: int = 0
+    szamla_nelkul_osszeg: float = 0
+    lejart_db: int = 0
+    lejart_osszeg: float = 0
+    osszeg_nelkul_db: int = 0
+    havi_trend: list[MonthlyFinance]
+    kintlevo_projektek: list[OutstandingProject]
+    ytd_kiadas_fizetesi_mod_szerint: list[PaymentMethodBreakdown]
+    #: Mennyi készpénz van a kasszában (lásd services/fizetesi_mod.py).
+    kassza: Kassza
+
+
+# Egy kiadás csak akkor számít bele a Pénzügy összesítőkbe (YTD kiadás, havi
+# trend, fizetési mód szerinti bontás), ha a "Hozzá adás a kiadásokhoz"
+# checkbox nincs kifejezetten kikapcsolva - a régi Notion-import forrásai
+# (sima "Kiadások" / "Belsős extra kiadások" táblák) nem is ismerték ezt a
+# mezőt, ott NULL-ként importálódott, ezért a NULL-t "számítson bele"-ként
+# kezeljük (nem "nincs bepipálva"-ként), hogy a checkbox bevezetése ne
+# tüntessen el némán történeti kiadásokat az összesítőkből - csak a
+# kifejezetten (a "Projekt kiadások" felvitelnél) kipipálatlanul hagyott
+# sorok esnek ki. A projektkód-szintű költség (ProjectCode.osszes_koltseg)
+# ettől függetlenül MINDIG az adott projekt teljes, valós költségét mutatja -
+# ez a gate csak a globális Pénzügy nézetet szűri.
+# Egy kiadás CSAK kifizetve (kesz) számít bele a kimutatásokba (a felhasználó
+# kérése a kiadas_datuma/fizetes_datuma összevonásakor): a dátum megléte
+# önmagában nem jelent kifizetést, mert a beérkezett, még ki nem fizetett
+# számlák is kapnak (megjelenítési) dátumot a fizetes_datuma mezőbe.
+_EXPENSE_COUNTS_TOWARD_TOTALS = Expense.hozzaadas_a_kiadasokhoz.is_not(False) & Expense.kesz.is_(True)
+
+# A bevétel-oldali párja: nem minden bevétel-sor pénz, ami ezen az úton folyt
+# be. A "nem volt tranzakció" formájú és a számla-lépésnél kifejezetten
+# kihagyott sorok LÁTSZANAK a listán (és a projekt profitjában is számítanak),
+# de az éves bevételbe nem valók - lásd services/elszamolas.py.
+_REVENUE_COUNTS_TOWARD_TOTALS = elszamolas.bevetel_beleszamit_sql(Revenue)
+
+
+def _kassza(db: Session, today: date, months: list[tuple[int, int]]) -> Kassza:
+    """A házipénztár egyenlege és havi mozgása - a Házipénztár oldallal KÖZÖS
+    számításból (lásd services/kassza.py).
+
+    Azért közös, mert a kettő ugyanarról a dobozról beszél: ha külön
+    számolnának, előbb-utóbb két különböző egyenleget mondanának, és a
+    kasszánál pont az a kérdés, hogy egyezik-e a szám a valósággal."""
+    kep = kassza_szolg.kep(db, today)
+    havi_sorok = [
+        KasszaHavi(month=honap, be=be, ki=ki, egyenleg=egyenleg)
+        for honap, be, ki, egyenleg in kassza_szolg.havi_bontas(kep, months)
+    ]
+    return Kassza(
+        egyenleg=kep.egyenleg,
+        osszes_be=kep.osszes.be,
+        osszes_ki=kep.osszes.ki,
+        idei_be=kep.idei.be,
+        idei_ki=kep.idei.ki,
+        idei_bevetel=kep.idei.bevetel,
+        idei_bevetel_db=kep.idei.bevetel_db,
+        idei_atvezetes=kep.idei.atvezetes,
+        idei_atvezetes_db=kep.idei.atvezetes_db,
+        idei_sima_kiadas=kep.idei.sima_kiadas,
+        idei_sima_kiadas_db=kep.idei.sima_kiadas_db,
+        idei_fekete_kiadas=kep.idei.fekete_kiadas,
+        idei_fekete_kiadas_db=kep.idei.fekete_kiadas_db,
+        havi=havi_sorok,
+    )
+
+
+def _last_n_months(today: date, n: int) -> list[tuple[int, int]]:
+    """[(év, hónap), ...] a mai hónapig bezárólag, régitől az újig rendezve -
+    ugyanaz a helper, mint a dashboard.py revenue_trend-jénél."""
+    months = []
+    year, month = today.year, today.month
+    for _ in range(n):
+        months.append((year, month))
+        month -= 1
+        if month == 0:
+            month = 12
+            year -= 1
+    return list(reversed(months))
+
+
+class KpNaploSor(BaseModel):
+    """Egy mozgás a házipénztár naplójában - a négy fajta egyike."""
+
+    #: A FORRÁS rekord azonosítója (nem naplósorszám): a `forras` mezővel
+    #: együtt azonosít.
+    id: int
+    #: bevetel (Revenue) | kiadas (Expense) | kp_forgalom (átvezetés)
+    forras: str
+    #: bevetel | atvezetes | kiadas | fekete_kiadas | fedezet (lásd services/kassza.py)
+    tipus: str
+    datum: date | None
+    megnevezes: str
+    projektkod: str | None = None
+    #: Egy sor vagy be, vagy ki - a másik nulla.
+    be: float = 0
+    ki: float = 0
+    #: FEDEZET-sornál a kiadás összege (a be/ki nulla: a pénz nem mozdult).
+    fedezet: float = 0
+    #: A házipénztár egyenlege EZ UTÁN a sor után, időrendben számolva.
+    egyenleg: float = 0
+    #: Van-e feltöltött számla (kiadásnál/bevételnél).
+    van_szamla: bool = False
+    atvezetes: bool = False
+    #: Hova visz a sor a felületen.
+    href: str | None = None
+    #: Feltöltött bizonylat(ok) - az átvezetés-soroknál.
+    csatolmanyok: list[DocumentAttachmentRead] = []
+    project_code_id: int | None = None
+    #: Devizás felvezetés nyoma (lásd services/penznem.py).
+    penznem: str | None = None
+    arfolyam: float | None = None
+    eredeti_penznem: str | None = None
+    eredeti_osszeg: float | None = None
+
+
+class KpOsszesites(BaseModel):
+    """Egy időszak házipénztár-képe - a négy fajta szerint."""
+
+    bevetel: float = 0
+    bevetel_db: int = 0
+    atvezetes: float = 0
+    atvezetes_db: int = 0
+    sima_kiadas: float = 0
+    sima_kiadas_db: int = 0
+    fekete_kiadas: float = 0
+    fekete_kiadas_db: int = 0
+    #: FEDEZET: számlás kiadás, amiért a pénz nem jött ki - nincs az egyenlegben.
+    fedezet: float = 0
+    fedezet_db: int = 0
+    be: float = 0
+    ki: float = 0
+    egyenleg: float = 0
+
+
+class KpNaplo(BaseModel):
+    """A házipénztár teljes naplója (lásd a végpont leírását)."""
+
+    sorok: list[KpNaploSor]
+    osszes: KpOsszesites
+    idei: KpOsszesites
+
+
+def _osszesites(o) -> KpOsszesites:
+    return KpOsszesites(
+        bevetel=o.bevetel,
+        bevetel_db=o.bevetel_db,
+        atvezetes=o.atvezetes,
+        atvezetes_db=o.atvezetes_db,
+        sima_kiadas=o.sima_kiadas,
+        sima_kiadas_db=o.sima_kiadas_db,
+        fekete_kiadas=o.fekete_kiadas,
+        fekete_kiadas_db=o.fekete_kiadas_db,
+        fedezet=o.fedezet,
+        fedezet_db=o.fedezet_db,
+        be=o.be,
+        ki=o.ki,
+        egyenleg=o.egyenleg,
+    )
+
+
+@summary_router.delete("/kp-forgalom/mind")
+def torol_minden_kp_forgalmat(
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PENZUGY_PAGE, "delete")),
+):
+    """MINDEN KP forgalom sor törlése egyszerre - a Notionből örökölt, nagyot
+    elcsúszott adat helyett a felhasználó nulláról tudja újraépíteni a
+    táblát (lásd frontend penzugyek/kp-forgalom "Összes tétel törlése" gombja).
+
+    Csak MAGÁT a kp_forgalmak táblát üríti - a hozzá kötött Kiadás-sorokat nem
+    érinti: az expense_id csak KpForgalom oldali hivatkozás, a kiadás önálló
+    rekord marad."""
+    torolt_db = db.query(KpForgalom).delete()
+    db.commit()
+    return {"torolt_db": torolt_db}
+
+
+@summary_router.delete("/kiadasok-bevetelek/mind")
+def torol_minden_kiadast_es_bevetelt(
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PENZUGY_PAGE, "delete")),
+):
+    """MINDEN Kiadás és Bevétel törlése egyszerre - a Notionből örökölt, nagyot
+    elcsúszott adat helyett a felhasználó nulláról tudja újraépíteni a két
+    táblát (lásd frontend penzugyek "Összes kiadás/bevétel törlése" gombja).
+
+    Törlés előtt eloldjuk a rájuk mutató hivatkozásokat: a havi belsős
+    tételek, a TIG-ek és a KP forgalom sorok MAGUK megmaradnak (valós,
+    elvégzett munkát/kifizetést jelentenek, nem a most törölt könyvelési
+    adat másolatai), csak a Kiadásra/Bevételre mutató kapcsolat törlődik -
+    különben a Postgres FK-kényszere miatt maga a törlés bukna el.
+
+    A feltöltött bizonylatokat (generikus csatolmány, entity_type=
+    expense/revenue) is töröljük, R2-ről is - egy törölt kiadáshoz/bevételhez
+    tartozó fájl árva maradna. A "kifizetve" jelölést hordozó csatolmányokon
+    (services/megrendeloi_szamla.py) a kifizetés-adatokat is visszaállítjuk:
+    a revenue_id-t a DB automatikusan null-ozza (ON DELETE SET NULL), de a
+    kifizetve_datuma nélküle tévesen kifizetettnek mutatna egy már nem
+    létező bevétel-sorra hivatkozva."""
+    db.query(EmployeeMonthlyItem).filter(EmployeeMonthlyItem.expense_id.isnot(None)).update({"expense_id": None})
+    db.query(InternalPerformanceCertificate).filter(InternalPerformanceCertificate.expense_id.isnot(None)).update(
+        {"expense_id": None}
+    )
+    db.query(PerformanceCertificate).filter(PerformanceCertificate.expense_id.isnot(None)).update(
+        {"expense_id": None}
+    )
+    db.query(KpForgalom).filter(KpForgalom.expense_id.isnot(None)).update({"expense_id": None})
+    db.query(Payment).filter(Payment.revenue_id.isnot(None)).update({"revenue_id": None})
+
+    db.query(DocumentAttachment).filter(DocumentAttachment.revenue_id.isnot(None)).update(
+        {
+            "kifizetve_datuma": None,
+            "tranzakcio_nelkul_lezarva": False,
+            "bevetelbe_ne_keruljon": False,
+            "bevetel_kihagyas_oka": None,
+        }
+    )
+
+    for csatolmany in db.scalars(
+        select(DocumentAttachment).where(DocumentAttachment.entity_type.in_(("expense", "revenue")))
+    ).all():
+        try:
+            attachments.delete(db, csatolmany)
+        except Exception:  # noqa: BLE001 - a tárhely-hiba ne akassza meg a törlést, a sor ekkorra már törölve
+            pass
+
+    for revenue in db.query(Revenue).filter(Revenue.szamla_storage_key.isnot(None)).all():
+        try:
+            document_storage.delete_object(revenue.szamla_storage_key)
+        except Exception:  # noqa: BLE001
+            pass
+
+    torolt_kiadas_db = db.query(Expense).delete()
+    torolt_bevetel_db = db.query(Revenue).delete()
+    db.commit()
+    return {"torolt_kiadas_db": torolt_kiadas_db, "torolt_bevetel_db": torolt_bevetel_db}
+
+
+@summary_router.delete("/kp-naplo/mind")
+def torol_minden_mozgast(
+    db: Session = Depends(get_db),
+    user: Employee = Depends(require_page_action(PENZUGY_PAGE, "delete")),
+):
+    """Az EGÉSZ KP forgalom-napló (Kiadás + Bevétel + Notionből örökölt KP
+    forgalom, lásd kp_naplo) egyszerre ürítése - a frontend penzugyek/
+    kp-forgalom oldal "Összes mozgás törlése" gombja hívja, amikor valaki
+    egy Notion-újraszinkronizálás előtt teljesen nulláról akarja kezdeni.
+
+    A két önálló törlést hívja meg (lásd torol_minden_kp_forgalmat,
+    torol_minden_kiadast_es_bevetelt) - így minden mellékhatásuk (FK-k
+    eloldása, bizonylatok törlése, "kifizetve" állapot visszaállítása) itt is
+    érvényesül, nem csak külön-külön hívva."""
+    kp = torol_minden_kp_forgalmat(db=db, _user=user)
+    ke = torol_minden_kiadast_es_bevetelt(db=db, _user=user)
+    return {**kp, **ke}
+
+
+class HazipenztarNullazasIn(BaseModel):
+    #: A végrehajtáshoz be kell írni: "NULLÁZÁS" (lásd
+    #: services/hazipenztar_nullazas.MEGEROSITES).
+    megerosites: str
+
+
+@summary_router.get("/hazipenztar/nullazas")
+def hazipenztar_nullazas_elonezet(
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PENZUGY_PAGE, "delete")),
+):
+    """Mi törlődne a házipénztár nullázásakor - darabszám és összeg
+    fajtánként. Semmit nem töröl (lásd services/hazipenztar_nullazas.py)."""
+    return hazipenztar_nullazas.elonezet(db)
+
+
+@summary_router.get("/hazipenztar/nullazas/mentes")
+def hazipenztar_nullazas_mentes(
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PENZUGY_PAGE, "delete")),
+):
+    """A törlendő sorok teljes JSON-mentése - a felület a végrehajtás ELŐTT
+    letölti. Semmit nem töröl."""
+    return hazipenztar_nullazas.mentes(db)
+
+
+@summary_router.post("/hazipenztar/nullazas")
+def hazipenztar_nullazas_vegrehajtas(
+    body: HazipenztarNullazasIn,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PENZUGY_PAGE, "delete")),
+):
+    """A HÁZIPÉNZTÁR NULLÁZÁSA: minden készpénzes tétel (KP forgalom, KP
+    kiadás, KP bevétel) törlése, mentéssel - lásd
+    services/hazipenztar_nullazas.py. A megerősítő szó nélkül nem fut."""
+    if body.megerosites.strip() != hazipenztar_nullazas.MEGEROSITES:
+        raise HTTPException(
+            status_code=400, detail=f"A nullázáshoz írd be: {hazipenztar_nullazas.MEGEROSITES}"
+        )
+    eredmeny = hazipenztar_nullazas.vegrehajt(db)
+    db.commit()
+    return eredmeny
+
+
+@summary_router.get("/kp-naplo", response_model=KpNaplo)
+def kp_naplo(db: Session = Depends(get_db), _user: Employee = Depends(get_current_user)):
+    """A HÁZIPÉNZTÁR naplója: minden mozgás egy listában, időrendben, futó
+    egyenleggel - a négy fajta szerint (készpénzes projektkód-bevétel,
+    ATM-átvezetés, sima és fekete készpénzes kiadás, lásd services/kassza.py).
+
+    A számítás a Pénzügyek kártyájáéval KÖZÖS, hogy a két felület ne
+    mondhasson mást ugyanarról a dobozról."""
+    kep = kassza_szolg.kep(db)
+    return KpNaplo(
+        sorok=[
+            KpNaploSor(
+                id=s.id,
+                forras=s.forras,
+                tipus=s.tipus,
+                datum=s.datum,
+                megnevezes=s.megnevezes,
+                projektkod=s.projektkod,
+                be=s.be,
+                ki=s.ki,
+                fedezet=s.fedezet,
+                egyenleg=s.egyenleg,
+                van_szamla=s.van_szamla,
+                atvezetes=s.atvezetes,
+                href=s.href,
+                csatolmanyok=s.csatolmanyok,
+                project_code_id=s.project_code_id,
+                penznem=s.penznem,
+                arfolyam=s.arfolyam,
+                eredeti_penznem=s.eredeti_penznem,
+                eredeti_osszeg=s.eredeti_osszeg,
+            )
+            for s in kep.sorok
+        ],
+        osszes=_osszesites(kep.osszes),
+        idei=_osszesites(kep.idei),
+    )
+
+
+@summary_router.get("/summary", response_model=FinanceSummary)
+def finance_summary(db: Session = Depends(get_db), _user: Employee = Depends(get_current_user)):
+    """A Pénzügyek oldal nagy összesítője: éves (YTD) bevétel/kiadás/profit,
+    az utolsó 12 hónap bevétel+kiadás trendje, és a kintlévőségek (kifizetetlen
+    bevétel-sorok, azaz Revenue.fizetes_datuma IS NULL) project code-onként
+    összesítve, a legnagyobb összeggel elöl."""
+    today = date.today()
+    year_start = date(today.year, 1, 1)
+
+    # Az összegzés NETTÓBAN megy - bevételnél és kiadásnál ugyanúgy, különben a
+    # profit a két oldal ÁFA-tartalmának különbségével csúszna el (lásd
+    # services/elszamolas.py). A bruttót külön kérdezzük le, tájékoztatásul.
+    ytd_bevetel = (
+        db.scalar(
+            select(func.coalesce(func.sum(elszamolas.netto_sql(Revenue)), 0)).where(
+                Revenue.fizetes_datuma.is_not(None),
+                Revenue.fizetes_datuma >= year_start,
+                _REVENUE_COUNTS_TOWARD_TOTALS,
+            )
+        )
+        or 0
+    )
+    ytd_bevetel_brutto = (
+        db.scalar(
+            select(func.coalesce(func.sum(elszamolas.brutto_sql(Revenue)), 0)).where(
+                Revenue.fizetes_datuma.is_not(None),
+                Revenue.fizetes_datuma >= year_start,
+                _REVENUE_COUNTS_TOWARD_TOTALS,
+            )
+        )
+        or 0
+    )
+    ytd_kiadas = (
+        db.scalar(
+            select(func.coalesce(func.sum(elszamolas.netto_sql(Expense)), 0)).where(
+                Expense.fizetes_datuma.is_not(None),
+                Expense.fizetes_datuma >= year_start,
+                _EXPENSE_COUNTS_TOWARD_TOTALS,
+            )
+        )
+        or 0
+    )
+    ytd_kiadas_brutto = (
+        db.scalar(
+            select(func.coalesce(func.sum(elszamolas.brutto_sql(Expense)), 0)).where(
+                Expense.fizetes_datuma.is_not(None),
+                Expense.fizetes_datuma >= year_start,
+                _EXPENSE_COUNTS_TOWARD_TOTALS,
+            )
+        )
+        or 0
+    )
+
+    # SZÁMLA EGYENLEG: az idei, bankszámlán mozgott pénz, NETTÓBAN (lásd
+    # FinanceSummary.szamla_egyenleg). Ugyanazok a kapuk, mint az éves
+    # összesítőnél - csak a fizetés útja szerint szűrve.
+    szamla_be = float(
+        db.scalar(
+            select(func.coalesce(func.sum(elszamolas.netto_sql(Revenue)), 0)).where(
+                Revenue.fizetes_datuma.is_not(None),
+                Revenue.fizetes_datuma >= year_start,
+                _REVENUE_COUNTS_TOWARD_TOTALS,
+                fizetesi_mod.bankszamlas_sql(Revenue.fizetes_modja),
+            )
+        )
+        or 0
+    )
+    szamla_kiadas = float(
+        db.scalar(
+            select(func.coalesce(func.sum(elszamolas.netto_sql(Expense)), 0)).where(
+                Expense.fizetes_datuma.is_not(None),
+                Expense.fizetes_datuma >= year_start,
+                _EXPENSE_COUNTS_TOWARD_TOTALS,
+                fizetesi_mod.bankszamlas_sql(Expense.kifizetes_modja),
+            )
+        )
+        or 0
+    )
+
+    months = _last_n_months(today, 12)
+    min_year, min_month = months[0]
+    min_date = date(min_year, min_month, 1)
+
+    revenue_by_month: dict[tuple[int, int], float] = {}
+    for row in db.execute(
+        select(
+            extract("year", Revenue.fizetes_datuma).label("y"),
+            extract("month", Revenue.fizetes_datuma).label("m"),
+            func.coalesce(func.sum(elszamolas.netto_sql(Revenue)), 0).label("total"),
+        )
+        .where(
+            Revenue.fizetes_datuma.is_not(None),
+            Revenue.fizetes_datuma >= min_date,
+            _REVENUE_COUNTS_TOWARD_TOTALS,
+        )
+        .group_by("y", "m")
+    ).all():
+        revenue_by_month[(int(row.y), int(row.m))] = float(row.total)
+
+    expense_by_month: dict[tuple[int, int], float] = {}
+    for row in db.execute(
+        select(
+            extract("year", Expense.fizetes_datuma).label("y"),
+            extract("month", Expense.fizetes_datuma).label("m"),
+            func.coalesce(func.sum(elszamolas.netto_sql(Expense)), 0).label("total"),
+        )
+        .where(Expense.fizetes_datuma.is_not(None), Expense.fizetes_datuma >= min_date, _EXPENSE_COUNTS_TOWARD_TOTALS)
+        .group_by("y", "m")
+    ).all():
+        expense_by_month[(int(row.y), int(row.m))] = float(row.total)
+
+    ytd_kiadas_fizetesi_mod_szerint = [
+        PaymentMethodBreakdown(kifizetes_modja=row.kifizetes_modja, osszeg=float(row.total))
+        for row in db.execute(
+            select(Expense.kifizetes_modja, func.coalesce(func.sum(elszamolas.netto_sql(Expense)), 0).label("total"))
+            .where(Expense.fizetes_datuma.is_not(None), Expense.fizetes_datuma >= year_start, _EXPENSE_COUNTS_TOWARD_TOTALS)
+            .group_by(Expense.kifizetes_modja)
+            .order_by(func.sum(elszamolas.netto_sql(Expense)).desc())
+        ).all()
+    ]
+
+    havi_trend = [
+        MonthlyFinance(
+            month=f"{y:04d}-{m:02d}",
+            bevetel=revenue_by_month.get((y, m), 0.0),
+            kiadas=expense_by_month.get((y, m), 0.0),
+        )
+        for y, m in months
+    ]
+
+    # A KINTLÉVŐSÉG FORRÁSA A PROJEKTKÓD: MINDEN projektkód, amiért még nem
+    # jött meg a pénz - számlával vagy anélkül -, hacsak nincs kimondva, hogy
+    # rendezve van (lásd services/kintlevoseg.py). A pénzügyes innen látja,
+    # hová kell még számlát kiállítani, és mi van kint kifizetetlenül.
+    kintlevo_sorok = kintlevoseg_szolg.projekt_kintlevosegek(db, ma=today)
+    kintlevo_projektek = [OutstandingProject(**sor) for sor in kintlevo_sorok]
+    bontas = kintlevoseg_szolg.osszesito(kintlevo_sorok)
+    osszes_kintlevoseg = float(sum(p.kintlevo_osszeg or 0 for p in kintlevo_projektek))
+
+    kassza = _kassza(db, today, months)
+    # Az ATM-felvétel a számláról megy ki (a házipénztárba érkezik) - a
+    # házipénztár átvezetés-összegéből vesszük: kiadás-sor nem készül hozzá
+    # (lásd _kp_forgalom_before_create).
+    szamla_atvezetes = kassza.idei_atvezetes
+    szamla_ki = szamla_kiadas + szamla_atvezetes
+
+    return FinanceSummary(
+        ytd_bevetel=float(ytd_bevetel),
+        ytd_kiadas=float(ytd_kiadas),
+        kp_egyenleg=kassza.egyenleg,
+        szamla_egyenleg=szamla_be - szamla_ki,
+        szamla_be=szamla_be,
+        szamla_ki=szamla_ki,
+        szamla_atvezetes=szamla_atvezetes,
+        ytd_bevetel_brutto=float(ytd_bevetel_brutto),
+        ytd_kiadas_brutto=float(ytd_kiadas_brutto),
+        osszes_kintlevoseg=osszes_kintlevoseg,
+        kintlevo_projektek_szama=len(kintlevo_projektek),
+        havi_trend=havi_trend,
+        kintlevo_projektek=kintlevo_projektek,
+        **bontas,
+        ytd_kiadas_fizetesi_mod_szerint=ytd_kiadas_fizetesi_mod_szerint,
+        kassza=kassza,
+    )
+
+
+# --- Kimenő számla fájl + havi számla-csomag -------------------------------
+
+
+@summary_router.post("/revenues/{revenue_id}/szamla", response_model=RevenueRead)
+async def upload_kimeno_szamla(
+    revenue_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PENZUGY_PAGE, "edit")),
+):
+    """A KIMENŐ (megrendelői) számla PDF-jének feltöltése egy bevétel-sorhoz.
+    Maga a számla külső számlázó rendszerben készül - ide azért kerül fel, hogy
+    a havi könyvelési csomagban (lásd szamlak_zip) a kimenő számlák is benne
+    legyenek, ne csak a bejövők. Bevételenként egy fájl: az újabb feltöltés
+    lecseréli a korábbit."""
+    revenue = db.get(Revenue, revenue_id)
+    if revenue is None:
+        raise HTTPException(status_code=404, detail="Bevétel nem található")
+
+    data = await file.read()
+    kulcs = f"kimeno-szamla/{revenue_id}/{uuid4().hex}_{file.filename}"
+    try:
+        url = document_storage.upload_bytes(data, kulcs, file.content_type or "application/octet-stream")
+    except R2NotConfiguredError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    # A korábbi fájl helyét felszabadítjuk - egy bevételhez egy számla tartozik.
+    if revenue.szamla_storage_key:
+        try:
+            document_storage.delete_object(revenue.szamla_storage_key)
+        except Exception:  # noqa: BLE001 - a törlés hibája ne bukjon a feltöltésen
+            pass
+
+    revenue.szamla_filename = file.filename
+    revenue.szamla_storage_key = kulcs
+    revenue.szamla_file_url = url
+    db.commit()
+    db.refresh(revenue)
+    return revenue
+
+
+@summary_router.delete("/revenues/{revenue_id}/szamla", response_model=RevenueRead)
+def delete_kimeno_szamla(
+    revenue_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PENZUGY_PAGE, "delete")),
+):
+    revenue = db.get(Revenue, revenue_id)
+    if revenue is None:
+        raise HTTPException(status_code=404, detail="Bevétel nem található")
+    if revenue.szamla_storage_key:
+        try:
+            document_storage.delete_object(revenue.szamla_storage_key)
+        except Exception:  # noqa: BLE001
+            pass
+    revenue.szamla_filename = None
+    revenue.szamla_storage_key = None
+    revenue.szamla_file_url = None
+    db.commit()
+    db.refresh(revenue)
+    return revenue
+
+
+def _honap_szuro(datum: date | None, ev: int, honap: int) -> bool:
+    return datum is not None and datum.year == ev and datum.month == honap
+
+
+def _csatolt_szamlak(db: Session, ev: int, honap: int) -> tuple[list[tuple[str, str]], list[tuple[str, str]], list[str]]:
+    """A rekordokhoz csatolt (feltöltött vagy Notionból átemelt) SZÁMLA
+    kategóriájú fájlok a hónapra bontva: (bejövő, kimenő, leírássorok).
+
+    A hónapot nem a feltöltés ideje adja, hanem a számla mögötti pénzügyi
+    dátum - a Notion importból származó fájlok mind egyszerre kerültek fel, a
+    hozzájuk tartozó kiadás/bevétel viszont tudja, mikori. Ha nincs ilyen
+    dátum, marad a feltöltés napja."""
+    bejovo: list[tuple[str, str]] = []
+    kimeno: list[tuple[str, str]] = []
+    leiras: list[str] = []
+
+    csatolmanyok = db.scalars(
+        select(DocumentAttachment).where(DocumentAttachment.kategoria == "szamla")
+    ).all()
+    kiadasok = {k.id: k for k in db.scalars(select(Expense)).all()} if csatolmanyok else {}
+    bevetelek = {b.id: b for b in db.scalars(select(Revenue)).all()} if csatolmanyok else {}
+
+    for csatolmany in csatolmanyok:
+        feltoltve = csatolmany.created_at.date() if csatolmany.created_at else None
+        datum, forras = feltoltve, f"{csatolmany.entity_type} #{csatolmany.entity_id}"
+        if csatolmany.entity_type == "expense":
+            kiadas = kiadasok.get(csatolmany.entity_id)
+            if kiadas is not None:
+                datum = kiadas.fizetes_datuma or kiadas.fizetes_hatarideje or feltoltve
+                forras = f"Kiadás #{kiadas.id} – {kiadas.megnevezes}"
+        elif csatolmany.entity_type == "revenue":
+            bevetel = bevetelek.get(csatolmany.entity_id)
+            if bevetel is not None:
+                datum = bevetel.szamla_kiallitva_datuma or bevetel.fizetes_datuma or feltoltve
+                forras = f"Bevétel #{bevetel.id}"
+        if not _honap_szuro(datum, ev, honap):
+            continue
+        mappa = "kimeno" if csatolmany.entity_type == "revenue" else "bejovo"
+        nev = f"{csatolmany.entity_type}_{csatolmany.entity_id}_{csatolmany.id}_{csatolmany.filename}"
+        (kimeno if mappa == "kimeno" else bejovo).append((nev, csatolmany.storage_key))
+        leiras.append(f"{mappa}/{nev}\t{forras}\tdátum: {datum}")
+
+    return bejovo, kimeno, leiras
+
+
+@summary_router.get("/szamlak-zip")
+def szamlak_zip(
+    ev: int,
+    honap: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PENZUGY_PAGE, "view")),
+):
+    """Egy hónap ÖSSZES számlája egyetlen ZIP-ben - a könyvelésnek szánt
+    csomag, hogy ne kelljen egyenként végigkattintani a TIG-eket és a
+    bevételeket.
+
+    A ZIP két mappára oszlik:
+
+      bejovo/  - a külsős és belsős TIG-ekhez feltöltött (alvállalkozói)
+                 számlák, a FELTÖLTÉS hónapja szerint: ekkor érkezett be a
+                 számla a rendszerbe,
+      kimeno/  - a bevételekhez feltöltött megrendelői számlák, a SZÁMLA
+                 KIÁLLÍTÁSÁNAK hónapja szerint (ha nincs kiállítási dátum, a
+                 feltöltés hónapja szerint).
+
+    A csomag mellé kerül egy tartalom.txt is, amiben soronként látszik, melyik
+    fájl honnan jött - hogy a könyvelő utólag is vissza tudja fejteni."""
+    bejovo: list[tuple[str, str]] = []  # (fájlnév a ZIP-ben, storage kulcs)
+    leiras: list[str] = []
+
+    kulsos = (
+        db.query(PerformanceCertificateInvoice)
+        .options(selectinload(PerformanceCertificateInvoice.certificate))
+        .all()
+    )
+    for szamla in kulsos:
+        if not _honap_szuro(szamla.created_at.date() if szamla.created_at else None, ev, honap):
+            continue
+        cert = szamla.certificate
+        nev = f"kulsos_tig_{cert.employee_id if cert else 'ismeretlen'}_{szamla.id}_{szamla.filename}"
+        bejovo.append((nev, szamla.storage_key))
+        leiras.append(f"bejovo/{nev}\tKülsős TIG #{szamla.certificate_id}\tfeltöltve: {szamla.created_at:%Y-%m-%d}")
+
+    belsos = (
+        db.query(InternalPerformanceCertificateInvoice)
+        .options(selectinload(InternalPerformanceCertificateInvoice.certificate))
+        .all()
+    )
+    for szamla in belsos:
+        if not _honap_szuro(szamla.created_at.date() if szamla.created_at else None, ev, honap):
+            continue
+        cert = szamla.certificate
+        honap_jel = "-".join(f"{r:02d}" for r in _belsos_honap(cert)) if cert else "ismeretlen"
+        nev = f"belsos_tig_{honap_jel}_{szamla.id}_{szamla.filename}"
+        bejovo.append((nev, szamla.storage_key))
+        leiras.append(f"bejovo/{nev}\tBelsős TIG ({honap_jel})\tfeltöltve: {szamla.created_at:%Y-%m-%d}")
+
+    kimeno: list[tuple[str, str]] = []
+    for revenue in db.scalars(select(Revenue).where(Revenue.szamla_storage_key.is_not(None))):
+        datum = revenue.szamla_kiallitva_datuma or (revenue.created_at.date() if revenue.created_at else None)
+        if not _honap_szuro(datum, ev, honap):
+            continue
+        nev = f"bevetel_{revenue.id}_{revenue.szamla_filename or 'szamla.pdf'}"
+        kimeno.append((nev, revenue.szamla_storage_key))
+        leiras.append(f"kimeno/{nev}\tBevétel #{revenue.id}\tkiállítva: {datum}")
+
+    # A rekordokhoz csatolt számlák (kézzel feltöltve vagy Notionból átemelve).
+    csatolt_bejovo, csatolt_kimeno, csatolt_leiras = _csatolt_szamlak(db, ev, honap)
+    bejovo += csatolt_bejovo
+    kimeno += csatolt_kimeno
+    leiras += csatolt_leiras
+
+    if not bejovo and not kimeno:
+        raise HTTPException(status_code=404, detail=f"Nincs feltöltött számla erre a hónapra: {ev}. {honap}.")
+
+    buffer = io.BytesIO()
+    hibas: list[str] = []
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        for mappa, tetelek in (("bejovo", bejovo), ("kimeno", kimeno)):
+            for nev, kulcs in tetelek:
+                try:
+                    zf.writestr(f"{mappa}/{nev}", document_storage.download_bytes(kulcs))
+                except R2NotConfiguredError as exc:
+                    raise HTTPException(status_code=503, detail=str(exc)) from exc
+                except Exception as exc:  # noqa: BLE001
+                    # Egyetlen hiányzó fájl ne buktassa az egész csomagot - a
+                    # tartalom.txt-ben viszont látszania kell, mi maradt ki.
+                    hibas.append(f"{mappa}/{nev}\tNEM SIKERÜLT LETÖLTENI: {exc}")
+        tartalom = [
+            f"HYPE OS - {ev}. {honap:02d}. havi számlák",
+            "",
+            "A 'bejovo' mappa a TIG-ekhez feltöltött (alvállalkozói) számlákat tartalmazza,",
+            "a feltöltés hónapja szerint. A 'kimeno' mappa a bevételekhez feltöltött",
+            "megrendelői számlákat, a számla kiállításának hónapja szerint.",
+            "",
+            *leiras,
+        ]
+        if hibas:
+            tartalom += ["", "HIÁNYZÓ FÁJLOK:", *hibas]
+        zf.writestr("tartalom.txt", "\n".join(tartalom))
+
+    buffer.seek(0)
+    fajlnev = f"szamlak_{ev}_{honap:02d}.zip"
+    return StreamingResponse(
+        buffer,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{fajlnev}"'},
+    )
+
+
+# --- Utalásra váró számlák --------------------------------------------------
+#
+# Ami már megérkezett hozzánk számlaként, de még nem utaltuk el. Két helyről
+# jön össze (külsős és belsős TIG-ek) - a felület egyben mutatja őket, hogy az
+# utalási körnél ne kelljen több listát végigkattintani, és a kijelöltek
+# számlái egyetlen ZIP-ben letölthetők legyenek (azt viszi a
+# könyvelő/ügyintéző a banki utaláshoz).
+#
+# A KIADÁSOK szándékosan NEM szerepelnek itt (a felhasználó kérése): a
+# házirendjük szerint amit kiadásként rögzítenek, az már el van utalva -
+# a kiadás-sor maga a megtörtént fizetés könyvelése, nem fizetnivaló.
+
+
+#: A fedezettség lehetséges állapotai (lásd _fedezettseg).
+FEDEZETT = "fedezett"
+RESZBEN_FEDEZETT = "reszben"
+FEDEZETRE_VAR = "var"
+NINCS_PROJEKTKOD = "nincs_projektkod"
+#: A fedezet megjött, de az alvállalkozó szerződése még nem érkezett vissza
+#: ALÁÍRVA (a felhasználó kérése) - ilyenkor még nem utalható.
+SZERZODESRE_VAR = "szerzodes"
+#: A szerződés ezekben az állapotokban HIÁNYZIK a kifizetéshez (ugyanaz a
+#: szabály, mint az utókövetésben - lásd services/utokovetes_hianyok.HIANYZO).
+_SZERZODES_HIANY = {"alairasra_var", "piszkozat", "hianyzik"}
+
+
+class UtalasraVaroTetel(BaseModel):
+    #: "expense:12" / "kulsos_tig:3" / "belsos_tig:7" - a ZIP-kérésben ezt
+    #: küldi vissza a felület, így egyetlen listában kezelhető a három forrás.
+    kulcs: str
+    tipus: str
+    megnevezes: str
+    kinek: str | None = None
+    osszeg: float | None = None
+    penznem: str = "HUF"
+    hatarido: date | None = None
+    szamla_db: int = 0
+    #: Hova visz a sor a felületen (a tétel saját adatlapja).
+    link: str | None = None
+    #: Megjött-e a tétel FEDEZETE, azaz kifizette-e már a megrendelő azt a
+    #: projektkódot, amihez a tétel tartozik. Ettől függ, hogy elutalható-e:
+    #: "fedezett" | "reszben" | "var" | "nincs_projektkod" (lásd _fedezettseg).
+    fedezettseg: str = NINCS_PROJEKTKOD
+    #: A tételhez tartozó projektkódok. Több is lehet: egy havi belsős TIG
+    #: több projekt extráit vonja össze - ilyenkor csak akkor utalható
+    #: nyugodtan, ha MINDEGYIK kódot kifizették.
+    projektkodok: list[str] = []
+    #: Ezek közül melyek NINCSENEK még kifizetve (ezekre várunk).
+    fedezetlen_projektkodok: list[str] = []
+    #: Hol hiányzik még az alvállalkozó ALÁÍRT szerződése (projekt: állapot) -
+    #: amíg nem üres, a tétel nem utalható (a felhasználó kérése).
+    szerzodes_hiany: list[str] = []
+
+
+class UtalasraVaroKeres(BaseModel):
+    kulcsok: list[str]
+
+
+def _belsos_honap(tig) -> tuple[int, int]:
+    """Egy belsős TIG elszámolt hónapja a dátumaiból - ezzel nevezzük meg."""
+    return belsos_tig_honapja(
+        tig.ev, tig.honap, tig.teljesites_datuma, tig.fizetesi_hatarido, tig.utalas_datuma,
+        rogzitett=bool(tig.honap_rogzitve),
+    )
+
+
+def _projektkod_fedezet(db: Session) -> tuple[dict[int, str], set[int]]:
+    """(projektkód id -> kód szövege, a KIFIZETETT projektkódok id-jai).
+
+    Kifizetett az a projektkód, amelyiknél
+      - a számla státusza szerint már befolyt a pénz ("Kifizetve és számla
+        feltöltve" - lásd KIFIZETETT_STATUSZ_MINTA), VAGY
+      - a rendszerben rögzített ÖSSZES bevételének van fizetési dátuma.
+
+    A második azért kell, mert a státuszt a Notionban tartják karban, a
+    bevétel-sorokat viszont itt: ha az egyiket vezetik, a másikat nem, attól
+    még megjött a pénz. A "mind" szándékosan szigorú: ha egy projektkód három
+    számlájából csak kettő érkezett meg, a fedezet még nem teljes."""
+    kodok = {pc.id: pc.projektkod for pc in db.scalars(select(ProjectCode)).all()}
+    statusz_szerint = {
+        pc.id
+        for pc in db.scalars(select(ProjectCode)).all()
+        if KIFIZETETT_STATUSZ_MINTA in (pc.szamla_statusza or "").lower()
+    }
+
+    osszes: dict[int, int] = {}
+    fizetett: dict[int, int] = {}
+    for project_code_id, fizetes_datuma in db.execute(
+        select(Revenue.project_code_id, Revenue.fizetes_datuma)
+    ).all():
+        osszes[project_code_id] = osszes.get(project_code_id, 0) + 1
+        if fizetes_datuma is not None:
+            fizetett[project_code_id] = fizetett.get(project_code_id, 0) + 1
+    bevetel_szerint = {kod for kod, db_szam in osszes.items() if fizetett.get(kod, 0) == db_szam}
+
+    return kodok, statusz_szerint | bevetel_szerint
+
+
+def _fedezettseg(
+    projektkod_idk: list[int], kodok: dict[int, str], kifizetett: set[int]
+) -> tuple[str, list[str], list[str]]:
+    """(állapot, minden projektkód, a még fedezetlenek) egy tételhez.
+
+    Projektkód nélkül nem tudjuk eldönteni (ilyen a projekthez nem kötött
+    kiadás, vagy az a havi belsős TIG, aminek egyetlen tétele sincs kódhoz
+    rendelve) - ezeket nem soroljuk sem az utalhatók, sem a várakozók közé,
+    hanem külön mutatjuk, hogy látszódjon: itt kézzel kell dönteni."""
+    egyediek = list(dict.fromkeys(projektkod_idk))
+    if not egyediek:
+        return NINCS_PROJEKTKOD, [], []
+    minden = [kodok.get(i) or f"#{i}" for i in egyediek]
+    fedezetlen = [kodok.get(i) or f"#{i}" for i in egyediek if i not in kifizetett]
+    if not fedezetlen:
+        return FEDEZETT, minden, []
+    if len(fedezetlen) < len(egyediek):
+        return RESZBEN_FEDEZETT, minden, fedezetlen
+    return FEDEZETRE_VAR, minden, fedezetlen
+
+
+def _szerzodes_hianyok(db: Session, tigek: list[PerformanceCertificate]) -> dict[int, list[str]]:
+    """Külsős TIG -> hol hiányzik még az ALÁÍRT szerződés (a felhasználó
+    kérése: csak az utalható, akinek a szerződése aláírva visszaérkezett).
+
+    Ugyanaz a szabály, mint az utókövetésben (services/utokovetes_hianyok):
+    rendben van az aláírva visszaérkezett eseti szerződés, a keretszerződés,
+    a belsős fél, a szándékosan kihagyott szerződés és a "van már
+    szerződése" jelölés; hiányzik a kiküldött, de alá nem írt, a piszkozat és
+    a nem létező szerződés. Forgatásos TIG-nél projektenként (összevont TIG:
+    mindegyik projektre), projektkódos TIG-nél a projektkódra nézzük."""
+    from app.api.routes.performance_certificates import tig_kulcsa
+    from app.api.routes.subcontractor_contracts import (
+        MAR_VAN_ALLAPOT,
+        _load_contract_lookup,
+        _load_contract_lookup_projektkodon,
+        _mentesul_keretszerzodessel,
+    )
+    from app.services.szamlazo import SzamlazoFel
+    from app.services.utokovetes_hianyok import SZERZODES_CIMKEK, _szerzodes_allapot
+
+    employee_ids = {t.employee_id for t in tigek if t.vallalkozas_id is None and t.employee_id is not None}
+    vallalkozas_ids = {t.vallalkozas_id for t in tigek if t.vallalkozas_id is not None}
+    keretek, projekt_szerzodesek = _load_contract_lookup(db, employee_ids, vallalkozas_ids)
+    projektkod_szerzodesek = _load_contract_lookup_projektkodon(db, employee_ids, vallalkozas_ids)
+
+    eredmeny: dict[int, list[str]] = {}
+    for tig in tigek:
+        kulcs = tig_kulcsa(tig)
+        if kulcs is None:
+            continue
+        fel = SzamlazoFel(employee=None if tig.vallalkozas is not None else tig.employee, vallalkozas=tig.vallalkozas)
+        hiany: list[str] = []
+        projektek = list({t.project.id: t.project for t in tig.tetelek if t.project is not None}.values())
+        if not projektek and tig.project is not None:
+            projektek = [tig.project]
+        for p in projektek:
+            allapot, _ = _szerzodes_allapot(p, kulcs, keretek, projekt_szerzodesek, fel)
+            if allapot in _SZERZODES_HIANY:
+                hiany.append(f"{p.projektkod_szoveg or p.nev or f'#{p.id}'}: {SZERZODES_CIMKEK[allapot]}")
+        if not projektek and tig.project_code_id is not None:
+            pk = tig.project_code
+            if not _mentesul_keretszerzodessel(keretek.get(kulcs, []), getattr(pk, "datum", None), fel):
+                c = projektkod_szerzodesek.get((tig.project_code_id, kulcs))
+                if c is None:
+                    allapot = "hianyzik"
+                elif c.szerzodes_allapota in ("Kihagyva", MAR_VAN_ALLAPOT):
+                    allapot = "rendben"
+                elif c.szerzodes_allapota == "Kiküldve":
+                    allapot = "alairva" if c.alairva else "alairasra_var"
+                else:
+                    allapot = "piszkozat"
+                if allapot in _SZERZODES_HIANY:
+                    hiany.append(f"{pk.projektkod if pk else f'#{tig.project_code_id}'}: {SZERZODES_CIMKEK[allapot]}")
+        if hiany:
+            eredmeny[tig.id] = hiany
+    return eredmeny
+
+
+def _utalasra_varo_tetelek(db: Session) -> list[tuple[UtalasraVaroTetel, list[tuple[str, str]]]]:
+    """(tétel, [(fájlnév a ZIP-ben, tárhely-kulcs)]) párok.
+
+    "Utalásra vár" az, ami még nincs kifizetve:
+      - külsős TIG, aminek van számlája, de nincs kifizetettként jelölve,
+      - belsős TIG, ami LE VAN ZÁRVA (a TIG legenerálva és kiküldve a
+        munkatársnak), van összege és nem kihagyott hónap - számla viszont
+        nem kell hozzá: a belsős munkatárs nem számlázik, a TIG maga a papír.
+
+    A KIADÁS-sorok szándékosan nincsenek itt (a felhasználó kérése): náluk a
+    kiadás rögzítése azt jelenti, hogy a pénz MÁR elment - a Notionből
+    importált és a kézzel felvitt kiadás is a megtörtént fizetés könyvelése,
+    nem utalnivaló (korábban az Adobe/Dropbox-féle, fizetési dátum nélkül
+    importált sorok hamis "fizetendőként" ültek a listán).
+
+    A külsős TIG-ekhez kiszámoljuk a FEDEZETTSÉGET is: megjött-e
+    már a pénz arra a projektkódra, amihez tartozik (lásd _fedezettseg) - ebből
+    látszik, kinek mehet nyugodtan az utalás. A belsős TIG ebből kimarad: a bér
+    nem a megrendelő pénzéből megy, tehát sosem vár fedezetre."""
+    eredmeny: list[tuple[UtalasraVaroTetel, list[tuple[str, str]]]] = []
+    kodok, kifizetett = _projektkod_fedezet(db)
+
+    kulsos = (
+        db.query(PerformanceCertificate)
+        .options(
+            selectinload(PerformanceCertificate.invoices),
+            selectinload(PerformanceCertificate.employee),
+            selectinload(PerformanceCertificate.vallalkozas),
+            selectinload(PerformanceCertificate.project),
+            selectinload(PerformanceCertificate.tetelek).selectinload(PerformanceCertificateTetel.project),
+        )
+        .filter(PerformanceCertificate.szamla_kifizetve.is_(False))
+        .all()
+    )
+    kulsos = [tig for tig in kulsos if tig.invoices]
+    szerzodes_hianyok = _szerzodes_hianyok(db, kulsos)
+    for tig in kulsos:
+        # A fedezet a projektek PROJEKTKÓDJÁN érkezik meg. Egy TIG TÖBB projekt
+        # munkáját is igazolhatja (egy ember több forgatást egy számlán küld
+        # be) - ilyenkor minden érintett projektkódot nézni kell, és a tétel
+        # csak akkor utalható, ha MINDEGYIKRE megjött a pénz. Ez az összevont
+        # számlák esete: részben fedezettként látszik, amíg az egyik ügyfél
+        # még nem fizetett.
+        #
+        # A FORGATÁS NÉLKÜLI (projektkódhoz kötött) TIG-nél nincs tétel és
+        # nincs `project` sem - a saját `project_code_id`-ja adja a kódot
+        # (lásd models/performance_certificate.py, routes/performance_certificates.py
+        # "projektkód-szintű ág").
+        tig_kodok = [t.project.project_code_id for t in tig.tetelek if t.project is not None]
+        if not tig_kodok and tig.project is not None:
+            tig_kodok = [tig.project.project_code_id]
+        if not tig_kodok and tig.project_code_id is not None:
+            tig_kodok = [tig.project_code_id]
+        allapot, minden_kod, fedezetlen = _fedezettseg(tig_kodok, kodok, kifizetett)
+        # A MÁSODIK feltétel (a felhasználó kérése): a fedezet mellett az
+        # alvállalkozó szerződésének is aláírva vissza kell érkeznie.
+        szerzodes_hiany = szerzodes_hianyok.get(tig.id, [])
+        if allapot == FEDEZETT and szerzodes_hiany:
+            allapot = SZERZODESRE_VAR
+        if tig.project_id is not None:
+            link = f"/projektek/{tig.project_id}"
+        elif tig.project_code_id is not None:
+            link = f"/utokovetes/projektkodok/{tig.project_code_id}"
+        else:
+            link = None
+        eredmeny.append(
+            (
+                UtalasraVaroTetel(
+                    fedezettseg=allapot,
+                    projektkodok=minden_kod,
+                    fedezetlen_projektkodok=fedezetlen,
+                    szerzodes_hiany=szerzodes_hiany,
+                    kulcs=f"kulsos_tig:{tig.id}",
+                    tipus="Külsős TIG",
+                    megnevezes=tig.megbizas_targya or "Külsős teljesítési igazolás",
+                    kinek=(tig.vallalkozas.nev if tig.vallalkozas else None)
+                    or (tig.employee.full_name if tig.employee else None),
+                    osszeg=float(tig.netto_osszeg) if tig.netto_osszeg is not None else None,
+                    penznem="HUF",
+                    hatarido=None,
+                    szamla_db=len(tig.invoices),
+                    link=link,
+                ),
+                [(f"kulsos_tig_{tig.id}_{sz.id}_{sz.filename}", sz.storage_key) for sz in tig.invoices],
+            )
+        )
+
+    belsos = (
+        db.query(InternalPerformanceCertificate)
+        .options(
+            selectinload(InternalPerformanceCertificate.invoices),
+            selectinload(InternalPerformanceCertificate.employee),
+        )
+        .filter(InternalPerformanceCertificate.szamla_kifizetve.is_(False))
+        .all()
+    )
+    # A belsős TIG a havi BÉR elszámolása, nem egy megrendelő munkájáé: a
+    # fizetés akkor is jár, ha az ügyfél még nem fizetett, tehát belsős TIG
+    # SOSEM vár fedezetre - ezeket mindig rögtön utaljuk. Ezért nem nézzük a
+    # hónap tételeinek projektkódjait, és számlát sem várunk hozzá (a belsős
+    # munkatárs nem számlázik, a TIG maga a papír).
+    #
+    # De csak a LEZÁRT hónap kerül ide: amíg a TIG nincs legenerálva és
+    # kiküldve a munkatársnak, az elszámolás még alakulhat (az összeg is), és
+    # ilyet nem utalunk el. A "Kifizetve" gomb ugyanezt követeli meg
+    # (routes/internal_performance_certificates._get_finalized_or_404) - ha a
+    # lista előbb dobná fel, olyat kínálna utalásra, amit a rendszer maga sem
+    # engedne kifizetettnek jelölni.
+    #
+    # Két dolog azon felül is kimarad: a KIHAGYOTT hónap (akkor nem dolgozott,
+    # nincs mit utalni) és az, aminek még nincs összege - azt nem tudnánk
+    # mennyivel elutalni, csak üres sorként állna a listán.
+    for tig in belsos:
+        if tig.allapot == KIHAGYVA or tig.netto_osszeg is None:
+            continue
+        if tig.allapot not in BELSOS_TIG_LEZART:
+            continue
+        eredmeny.append(
+            (
+                UtalasraVaroTetel(
+                    fedezettseg=FEDEZETT,
+                    kulcs=f"belsos_tig:{tig.id}",
+                    tipus="Belsős TIG",
+                    # A megnevezés a TIG DÁTUMAIBÓL jön: a 07.20-i fizetési
+                    # határidejű a JÚNIUSI elszámolásé (lásd
+                    # services/hu_datum.belsos_tig_honapja).
+                    megnevezes=f"{ev_honap_szoveg(*_belsos_honap(tig))} havi TIG",
+                    kinek=tig.employee.full_name if tig.employee else None,
+                    osszeg=float(tig.netto_osszeg) if tig.netto_osszeg is not None else None,
+                    penznem="HUF",
+                    hatarido=tig.fizetesi_hatarido,
+                    szamla_db=len(tig.invoices),
+                    link=f"/belsos-tig/{tig.employee_id}/{tig.ev}/{tig.honap}",
+                ),
+                [(f"belsos_tig_{tig.id}_{sz.id}_{sz.filename}", sz.storage_key) for sz in tig.invoices],
+            )
+        )
+
+    # A FIZETÉSI HATÁRIDŐVEL rögzített, MÉG KI NEM FIZETETT kiadások (pl. egy
+    # szerviz-számla az autónál, vagy egy kiadás, amiről számla jött, de még
+    # nem utaltuk el - a felhasználó kérése): ezek kivételek a fenti "a
+    # kiadás már kifizetett" szabály alól, mert KIFEJEZETTEN kifizetetlenként,
+    # határidővel vezették fel őket (lásd services/kifizetesre_varo.py). A
+    # "Fizetés" gombjuk az autó lapján, ill. a Kiadások "Kifizetésre vár"
+    # fülén van.
+    hataridos = kifizetesre_varo.kiadasok(db, csak_hataridos=True)
+    bizonylatok: dict[int, list[DocumentAttachment]] = {}
+    if hataridos:
+        for d in db.scalars(
+            select(DocumentAttachment).where(
+                DocumentAttachment.entity_type.in_(("expense", "autoKiadas")),
+                DocumentAttachment.entity_id.in_([e.id for e in hataridos]),
+            )
+        ):
+            bizonylatok.setdefault(d.entity_id, []).append(d)
+    for e in hataridos:
+        fajlok = bizonylatok.get(e.id, [])
+        autos = e.auto is not None
+        eredmeny.append(
+            (
+                UtalasraVaroTetel(
+                    # Mint a belsős TIG: ezt nem a megrendelő pénzéből
+                    # fizetjük, tehát nem vár fedezetre.
+                    fedezettseg=FEDEZETT,
+                    projektkodok=[e.project_code.projektkod] if e.project_code is not None else [],
+                    kulcs=f"{'auto_kiadas' if autos else 'kiadas'}:{e.id}",
+                    tipus="Autó" if autos else "Kiadás",
+                    megnevezes=(e.kiadas_leiras or e.megnevezes or "Kiadás") if not autos else (e.megnevezes or "Autó költés"),
+                    kinek=e.auto.rendszam if autos else e.megnevezes,
+                    osszeg=float(e.netto) if e.netto is not None else None,
+                    penznem="HUF",
+                    hatarido=e.fizetes_hatarideje,
+                    szamla_db=len(fajlok),
+                    link="/autok" if autos else "/penzugyek/kiadasok?kiadas_nezet=varo",
+                ),
+                [(f"kiadas_{e.id}_{d.id}_{d.filename}", d.storage_key) for d in fajlok],
+            )
+        )
+
+    # A legrégebbi határidő elöl (ami már lejárt, azt kell először utalni), a
+    # határidő nélküliek a végén.
+    eredmeny.sort(key=lambda p: (p[0].hatarido is None, p[0].hatarido or date.max, p[0].megnevezes))
+    return eredmeny
+
+
+@summary_router.get("/utalasra-varo", response_model=list[UtalasraVaroTetel])
+def utalasra_varo(
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PENZUGY_PAGE, "view")),
+):
+    return [tetel for tetel, _ in _utalasra_varo_tetelek(db)]
+
+
+@summary_router.get("/kifizetesre-varo-kiadasok", response_model=list[int])
+def kifizetesre_varo_kiadasok(
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PENZUGY_PAGE, "view")),
+):
+    """A Kiadások "Kifizetésre vár" fülének tételei (azonosítók, határidő
+    szerint rendezve) - lásd services/kifizetesre_varo.py."""
+    return [e.id for e in kifizetesre_varo.kiadasok(db)]
+
+
+@summary_router.get("/kiadas-szamla-darab", response_model=dict[int, int])
+def kiadas_szamla_darab(
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PENZUGY_PAGE, "view")),
+):
+    """Kiadásonként hány számla-fájl van fent - a Kiadások lista gemkapocs-
+    ikonja mellé (a felhasználó kérése). Az összes forrást számolja, amit a
+    kiadás számla-nézete mutat (lásd kiadas_atvezetett_szamlak): a saját
+    feltöltést, az autó-oldali bizonylatot, a külsős/belsős TIG számláit és
+    a KP forgalom bizonylatát - néhány csoportosított lekérdezéssel, nem
+    kiadásonként külön körrel."""
+    darab: dict[int, int] = {}
+
+    def _hozzaad(sorok) -> None:
+        for expense_id, db_ in sorok:
+            if expense_id is not None:
+                darab[expense_id] = darab.get(expense_id, 0) + int(db_)
+
+    # Saját számla-csatolmány + az Autók oldal bizonylata: mindkettő az
+    # Expense-sor id-jára mutat, csak más entitás-néven.
+    _hozzaad(
+        db.execute(
+            select(DocumentAttachment.entity_id, func.count())
+            .where(
+                DocumentAttachment.entity_type.in_(["expense", "autoKiadas"]),
+                DocumentAttachment.kategoria == "szamla",
+            )
+            .group_by(DocumentAttachment.entity_id)
+        ).all()
+    )
+    _hozzaad(
+        db.execute(
+            select(PerformanceCertificate.expense_id, func.count())
+            .join(
+                PerformanceCertificateInvoice,
+                PerformanceCertificateInvoice.certificate_id == PerformanceCertificate.id,
+            )
+            .where(PerformanceCertificate.expense_id.is_not(None))
+            .group_by(PerformanceCertificate.expense_id)
+        ).all()
+    )
+    _hozzaad(
+        db.execute(
+            select(InternalPerformanceCertificate.expense_id, func.count())
+            .join(
+                InternalPerformanceCertificateInvoice,
+                InternalPerformanceCertificateInvoice.certificate_id == InternalPerformanceCertificate.id,
+            )
+            .where(InternalPerformanceCertificate.expense_id.is_not(None))
+            .group_by(InternalPerformanceCertificate.expense_id)
+        ).all()
+    )
+    _hozzaad(
+        db.execute(
+            select(KpForgalom.expense_id, func.count())
+            .join(
+                DocumentAttachment,
+                (DocumentAttachment.entity_type == "kpForgalom")
+                & (DocumentAttachment.entity_id == KpForgalom.id),
+            )
+            .where(KpForgalom.expense_id.is_not(None))
+            .group_by(KpForgalom.expense_id)
+        ).all()
+    )
+    return darab
+
+
+class AtvezetettSzamla(BaseModel):
+    """Egy MÁSHOL feltöltött számla, ami ehhez a kiadáshoz tartozik - a
+    kiadás egy átvezetett tétel (TIG-kifizetés, autó-költés, KP forgalom),
+    és a számláját ott töltötték fel, ahonnan átvezették."""
+
+    filename: str
+    url: str
+    #: Emberi címke: honnan jött a számla (pl. "Külsős TIG – Kovács Béla").
+    forras: str
+    #: A forrás oldala a felületen - ide visz a kattintás.
+    forras_link: str | None = None
+
+
+@summary_router.get("/kiadas/{expense_id}/atvezetett-szamlak", response_model=list[AtvezetettSzamla])
+def kiadas_atvezetett_szamlak(
+    expense_id: int,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PENZUGY_PAGE, "view")),
+):
+    """A kiadáshoz MÁSHOL feltöltött számlák (a felhasználó kérése).
+
+    Sok kiadás-sor nem kézzel születik, hanem átvezetés: a külsős/belsős TIG
+    "kifizetve" jelölése hozza létre (PerformanceCertificate.expense_id /
+    InternalPerformanceCertificate.expense_id), az autó-költést az Autók
+    oldalon vezetik fel (Expense.auto_id, a bizonylat az "autoKiadas"
+    csatolmány-entitáson él), a KP forgalom sora pedig a saját bizonylatával
+    kapcsolódik (KpForgalom.expense_id). A számlát ilyenkor a FORRÁSNÁL
+    töltötték fel - itt gyűjtjük össze, hogy a Kiadások oldalon ne kelljen
+    újra feltölteni (és ne is legyen "hiányzó számla" érzete annak, ami
+    valójában megvan)."""
+    expense = db.get(Expense, expense_id)
+    if expense is None:
+        raise HTTPException(status_code=404, detail="Kiadás nem található")
+
+    eredmeny: list[AtvezetettSzamla] = []
+
+    def _tig_nev(cert) -> str:
+        ceg = getattr(cert, "ceg_neve", None)
+        if ceg:
+            return str(ceg)
+        return cert.employee.full_name if cert.employee is not None else f"#{cert.id}"
+
+    for tig in db.query(PerformanceCertificate).filter(PerformanceCertificate.expense_id == expense_id).all():
+        for inv in tig.invoices:
+            eredmeny.append(
+                AtvezetettSzamla(
+                    filename=inv.filename,
+                    url=inv.url,
+                    forras=f"Külsős TIG – {_tig_nev(tig)}",
+                    forras_link="/utokovetes/kulsos-tigek",
+                )
+            )
+    for tig in (
+        db.query(InternalPerformanceCertificate)
+        .filter(InternalPerformanceCertificate.expense_id == expense_id)
+        .all()
+    ):
+        for inv in tig.invoices:
+            eredmeny.append(
+                AtvezetettSzamla(
+                    filename=inv.filename,
+                    url=inv.url,
+                    forras=f"Belsős TIG – {_tig_nev(tig)}",
+                    forras_link="/belsos-tig",
+                )
+            )
+
+    # Autó-költés: UGYANEZ az Expense-sor, csak a bizonylatát az Autók oldal
+    # saját csatolmány-entitása alatt tárolja (lásd routes/autok.py
+    # KIADAS_ENTITAS) - az entity_id ott is a kiadás id-ja.
+    if expense.auto_id is not None:
+        auto_nev = (
+            (expense.auto.megnevezes or expense.auto.rendszam) if expense.auto is not None else "autó"
+        )
+        for a in db.scalars(
+            select(DocumentAttachment).where(
+                DocumentAttachment.entity_type == "autoKiadas",
+                DocumentAttachment.entity_id == expense_id,
+            )
+        ).all():
+            eredmeny.append(
+                AtvezetettSzamla(
+                    filename=a.filename,
+                    url=a.url,
+                    forras=f"Autó költés – {auto_nev}",
+                    forras_link=f"/autok/{expense.auto_id}",
+                )
+            )
+
+    kp_idk = list(db.scalars(select(KpForgalom.id).where(KpForgalom.expense_id == expense_id)).all())
+    if kp_idk:
+        for a in db.scalars(
+            select(DocumentAttachment).where(
+                DocumentAttachment.entity_type == "kpForgalom",
+                DocumentAttachment.entity_id.in_(kp_idk),
+            )
+        ).all():
+            eredmeny.append(
+                AtvezetettSzamla(
+                    filename=a.filename,
+                    url=a.url,
+                    forras="Házipénztár",
+                    forras_link="/penzugyek/kp-forgalom",
+                )
+            )
+    return eredmeny
+
+
+@summary_router.post("/utalasra-varo/zip")
+def utalasra_varo_zip(
+    payload: UtalasraVaroKeres,
+    db: Session = Depends(get_db),
+    _user: Employee = Depends(require_page_action(PENZUGY_PAGE, "view")),
+):
+    """A KIJELÖLT tételek számlái egyetlen ZIP-ben - ezt viszi az, aki az
+    utalásokat indítja. A csomagban egy tartalom.txt is van, hogy utólag
+    látszódjon, melyik fájl melyik tételhez (és mekkora összeghez) tartozik."""
+    kert = set(payload.kulcsok)
+    if not kert:
+        raise HTTPException(status_code=400, detail="Nincs kijelölt tétel.")
+
+    valasztott = [(tetel, fajlok) for tetel, fajlok in _utalasra_varo_tetelek(db) if tetel.kulcs in kert]
+    if not valasztott:
+        raise HTTPException(status_code=404, detail="A kijelölt tételekhez nem található számla.")
+
+    buffer = io.BytesIO()
+    hibas: list[str] = []
+    leiras: list[str] = []
+    osszeg = 0.0
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        for tetel, fajlok in valasztott:
+            osszeg += tetel.osszeg or 0
+            if not fajlok:
+                # Van olyan tétel, amihez nem is tartozik számla (belsős TIG:
+                # a bejelentett munkatárs nem számlázik) - a csomagban ettől
+                # még szerepelnie kell, különben az utaló nem látja a listán.
+                leiras.append(
+                    f"(nincs számla fájl)\t{tetel.tipus}\t{tetel.kinek or '-'}\t{tetel.megnevezes}\t"
+                    f"{tetel.osszeg if tetel.osszeg is not None else '-'} {tetel.penznem}\t"
+                    f"határidő: {tetel.hatarido or '-'}"
+                )
+            for nev, kulcs in fajlok:
+                try:
+                    zf.writestr(nev, document_storage.download_bytes(kulcs))
+                except R2NotConfiguredError as exc:
+                    raise HTTPException(status_code=503, detail=str(exc)) from exc
+                except Exception as exc:  # noqa: BLE001 - egy hiányzó fájl ne buktassa a csomagot
+                    hibas.append(f"{nev}\tNEM SIKERÜLT LETÖLTENI: {exc}")
+                    continue
+                leiras.append(
+                    f"{nev}\t{tetel.tipus}\t{tetel.kinek or '-'}\t{tetel.megnevezes}\t"
+                    f"{tetel.osszeg if tetel.osszeg is not None else '-'} {tetel.penznem}\t"
+                    f"határidő: {tetel.hatarido or '-'}"
+                )
+        tartalom = [
+            f"HYPE OS - utalásra váró számlák ({date.today():%Y-%m-%d})",
+            f"{len(valasztott)} tétel, összesen {round(osszeg)} Ft",
+            "",
+            *leiras,
+        ]
+        if hibas:
+            tartalom += ["", "HIÁNYZÓ FÁJLOK:", *hibas]
+        zf.writestr("tartalom.txt", "\n".join(tartalom))
+
+    buffer.seek(0)
+    return StreamingResponse(
+        buffer,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="utalasra_varo_szamlak_{date.today():%Y%m%d}.zip"'},
+    )

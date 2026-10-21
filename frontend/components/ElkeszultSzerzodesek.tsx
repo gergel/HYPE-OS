@@ -1,0 +1,343 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { Trash2 } from "lucide-react";
+import { authFetch } from "@/lib/authFetch";
+import { StatusBadge } from "@/components/StatusBadge";
+import { SZERZODES_ALLAPOTOK, SZERZODES_MAR_VAN, TigAllapotSelect } from "@/components/TigAllapotSelect";
+import { useConfirm } from "@/components/ConfirmProvider";
+import { EmlekeztetoElonezet } from "@/components/EmlekeztetoElonezet";
+import { formatFt, formatIdopont } from "@/lib/ido";
+import type { ElkeszultSzerzodes } from "@/lib/api";
+
+/** Egy projekt már elkészült eseti szerződései.
+ *
+ * A fölötte lévő "Szerződés készítés" blokk csak a TEENDŐKET sorolja fel:
+ * amint egy szerződés kiküldésre kerül (vagy kihagyják), az onnan eltűnik.
+ * Ez a lista mutatja meg, kinek van kész papírja - a generált dokumentum
+ * linkjével és a szerződés adatlapjával, ahová az aláírt PDF feltölthető.
+ *
+ * Egy kész papír itt VISSZAVEHETŐ és TÖRÖLHETŐ:
+ *
+ * - az állapot "Készítés alatt"-ra állításával az illető visszakerül a fenti
+ *   teendő-listára, ahol az adatai újra szerkeszthetők és a szerződés
+ *   újragenerálható - anélkül, hogy bármit elölről kellene felvinni (lásd
+ *   backend subcontractor_contracts.py set_szerzodes_allapot);
+ * - a törlés a bejegyzést szünteti meg, ha tiszta lappal kell újrakezdeni
+ *   (lásd delete_contract).
+ *
+ * Ugyanaz a két lehetőség, ami a TIG-nél már megvolt - a papírozás két oldala
+ * ne viselkedjen máshogy. */
+export function ElkeszultSzerzodesek({
+  projectId,
+  szerzodesek,
+  canEdit = true,
+  canDelete = true,
+  // A projektkód-szintű (forgatás nélküli) ágon a végpontok NEM a
+  // `/{project_id}/...` alatt élnek, hanem a `/projektkodok/{project_code_id}/...`
+  // alatt (lásd backend subcontractor_contracts.py "projektkód-szintű ág") -
+  // ilyenkor a hívó ezt a bázisutat adja meg, a projectId csak a `key`-hez kell.
+  basePath,
+}: {
+  projectId: number;
+  szerzodesek: ElkeszultSzerzodes[];
+  canEdit?: boolean;
+  canDelete?: boolean;
+  basePath?: string;
+}) {
+  const router = useRouter();
+  const confirm = useConfirm();
+  const base = basePath ?? `/api/v1/alvallalkozoi-szerzodesek/${projectId}`;
+  // A számlázó fél kulcsa ("e12" / "v3"), nem ember-azonosító: a
+  // szerződés cég nevére is szólhat (lásd backend services/szamlazo.py).
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [elonezetId, setElonezetId] = useState<number | null>(null);
+
+  // Minden LEZÁRT szerződés ide tartozik - a "Van már szerződés" is, ami a
+  // máshol elkészült papírt jelöli (lásd backend MAR_VAN_ALLAPOT).
+  const kesz = szerzodesek.filter(
+    (s) =>
+      s.szerzodes_allapota === "Kiküldve" ||
+      s.szerzodes_allapota === "Kihagyva" ||
+      s.szerzodes_allapota === SZERZODES_MAR_VAN,
+  );
+  if (kesz.length === 0) return null;
+
+  /** Az ALÁÍRVA visszaérkezett példány feltöltése. Külön a generált/feltöltött
+   * saját dokumentumtól: az a mi papírunk, ez a visszakapott - a kettő
+   * egyszerre is létezik. Amíg ez nincs meg, a projekt "aláírt szerződésre
+   * vár" az utókövetés áttekintőjén. */
+  async function alairtFeltolt(s: ElkeszultSzerzodes, file: File) {
+    setBusyId(s.szamlazo);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await authFetch(`${base}/${s.szamlazo}/alairt-fajl`, {
+        method: "POST",
+        body: fd,
+      });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        alert(`Sikertelen feltöltés: ${detail?.detail ?? res.status}`);
+        return;
+      }
+      router.refresh();
+    } catch (err) {
+      alert(`Sikertelen feltöltés (hálózati hiba): ${err}`);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function alairtTorol(s: ElkeszultSzerzodes) {
+    const ok = await confirm(`Eldobod ${s.full_name} feltöltött aláírt szerződését? Utána újra visszavárjuk.`);
+    if (!ok) return;
+    setBusyId(s.szamlazo);
+    try {
+      const res = await authFetch(`${base}/${s.szamlazo}/alairt-fajl`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        alert(`Sikertelen törlés: ${detail?.detail ?? res.status}`);
+        return;
+      }
+      router.refresh();
+    } catch (err) {
+      alert(`Sikertelen törlés (hálózati hiba): ${err}`);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function torol(s: ElkeszultSzerzodes) {
+    // A több napra szóló papír törlése MINDEGYIK napról leveszi a szerződést -
+    // ezt előre kimondjuk, mert a törlés a papírt viszi, nem a kapcsolatot.
+    const tobbNapos =
+      s.projektek.length > 1
+        ? ` Ez a szerződés ${s.projektek.length} projektre szól (${s.projektek.join(", ")}), tehát mindegyikről eltűnik.`
+        : "";
+    // A szerződés törlése a hozzá tartozó TIG-et IS viszi (a felhasználó
+    // kérése - mindkét ágon, lásd backend delete_contract és
+    // delete_contract_projektkodon), hogy mindenből újat lehessen készíteni.
+    // Kifizetett TIG-nél a szerver megáll.
+    const ok = await confirm(
+      `Törlöd ${s.full_name} szerződését erről a projektről? Ez a hozzá tartozó teljesítési igazolást is törli (ha van, és nincs kifizetve). Ezután újra a teendők közt jelenik meg, és mindenből készíthetsz újat.${tobbNapos}`,
+    );
+    if (!ok) return;
+    setBusyId(s.szamlazo);
+    try {
+      const res = await authFetch(`${base}/${s.szamlazo}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        alert(`Sikertelen törlés: ${detail?.detail ?? res.status}`);
+        return;
+      }
+      router.refresh();
+    } catch (err) {
+      alert(`Sikertelen törlés (hálózati hiba): ${err}`);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <div className="mt-4 border-t border-border pt-4">
+      <p className="mb-2 text-[13px] font-medium text-text-primary">Elkészült szerződések</p>
+      <div className="overflow-x-auto">
+        <table className="os-table min-w-full border-collapse text-[13px]">
+          <thead>
+            <tr className="border-b border-border">
+              <th className="py-1.5 pr-6 text-left font-medium text-text-secondary">Megbízott</th>
+              <th className="py-1.5 pr-6 text-left font-medium text-text-secondary">Állapot</th>
+              <th className="py-1.5 pr-6 text-right font-medium text-text-secondary">Nettó</th>
+              <th className="py-1.5 pr-6 text-left font-medium text-text-secondary">Szerződés</th>
+              <th className="py-1.5 pr-6 text-left font-medium text-text-secondary">Aláírva visszaérkezett</th>
+              <th className="py-1.5 text-right font-medium text-text-secondary" />
+            </tr>
+          </thead>
+          <tbody>
+            {kesz.map((s) => (
+              <tr key={s.contract_id} className="border-b border-border last:border-0">
+                <td className="py-2.5 pr-6">
+                  {/* Az oszlop szélessége korlátozva (belső div-en, mert a td-n
+                      a táblázat auto-elrendezése nem mindig tartja be): a sok
+                      projektet fedő papír felsorolása különben egyetlen hosszú
+                      sorként kitolta a többi oszlopot a képernyőről. */}
+                  <div className="max-w-[20rem] whitespace-normal [overflow-wrap:anywhere]">
+                    {s.full_name}
+                    {/* Egy szerződés több forgatási napra is szólhat. Enélkül a
+                        többi napon úgy tűnne, hogy oda nem készült papír - vagy
+                        hogy ott egy másik, külön szerződés van. */}
+                    {s.projektek.length > 1 && (
+                      <details className="mt-0.5 text-[11.5px] text-text-muted">
+                        <summary className="cursor-pointer list-none hover:text-text-secondary">
+                          Közös papír {s.projektek.length} projektre ▾
+                        </summary>
+                        <span className="block">{s.projektek.join(", ")}</span>
+                      </details>
+                    )}
+                  </div>
+                </td>
+                <td className="py-2.5 pr-6">
+                  {/* Legördíthető: "Készítés alatt"-ra visszavéve a fél újra a
+                      teendők közé kerül, és a szerződése szerkeszthető. */}
+                  <TigAllapotSelect
+                    postPath={`${base}/${s.szamlazo}/allapot`}
+                    value={s.szerzodes_allapota}
+                    allapotok={SZERZODES_ALLAPOTOK}
+                    canEdit={canEdit}
+                  />
+                  {/* A kihagyás indoka a jelölés mellett látszik: enélkül egy
+                      hiányzó papírról később nem derülne ki, hogy szándékos volt. */}
+                  {s.kihagyas_oka && (
+                    <p className="mt-1 max-w-[22rem] text-[11.5px] text-text-muted">{s.kihagyas_oka}</p>
+                  )}
+                </td>
+                <td className="whitespace-nowrap py-2.5 pr-6 text-right tabular-nums">
+                  {s.netto_osszeg === null ? "–" : formatFt(s.netto_osszeg)}
+                </td>
+                <td className="py-2.5 pr-6">
+                  <span className="flex flex-wrap gap-x-3 gap-y-1">
+                    {s.szerzodes_file_url && (
+                      <a
+                        href={s.szerzodes_file_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-text-accent hover:underline"
+                      >
+                        Elkészült szerződés
+                      </a>
+                    )}
+                    {/* A szerződés saját adatlapja: ide tölthető fel az aláírva
+                        visszakapott PDF. */}
+                    <a href={`/szerzodesek/${s.contract_id}`} className="text-text-accent hover:underline">
+                      Adatlap és fájlok
+                    </a>
+                  </span>
+                </td>
+                <td className="py-2.5 pr-6">
+                  {/* A KIHAGYOTT szerződésnél nincs papír, amit vissza lehetne
+                      várni - ott nincs mit mutatni. */}
+                  {s.szerzodes_allapota !== "Kiküldve" ? (
+                    <span className="text-text-muted">–</span>
+                  ) : s.alairva ? (
+                    <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                      <StatusBadge label="Megérkezett" tone="success" />
+                      {s.alairt_file_url && (
+                        <a
+                          href={s.alairt_file_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-text-accent hover:underline"
+                        >
+                          Aláírt példány
+                        </a>
+                      )}
+                      {canEdit && (
+                        <button
+                          type="button"
+                          disabled={busyId === s.szamlazo}
+                          onClick={() => alairtTorol(s)}
+                          className="text-[12px] text-text-muted hover:text-text-danger disabled:opacity-50"
+                        >
+                          Eldobás
+                        </button>
+                      )}
+                    </span>
+                  ) : (
+                    <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                      <StatusBadge label="Visszavárjuk" tone="warning" />
+                      {canEdit && (
+                        <label className="cursor-pointer text-[12px] text-text-accent hover:underline">
+                          Feltöltés
+                          <input
+                            type="file"
+                            className="hidden"
+                            disabled={busyId === s.szamlazo}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              // Az input értékét nullázzuk, hogy ugyanazt a
+                              // fájlt újra ki lehessen választani egy hibás
+                              // feltöltés után.
+                              e.target.value = "";
+                              if (file) alairtFeltolt(s, file);
+                            }}
+                          />
+                        </label>
+                      )}
+                      {/* KIKÜLDÉS ÉS EMLÉKEZTETŐ (a felhasználó kérése): a
+                          kiküldéstől kezdve látszik, mikor ment ki, és hány
+                          nap múlva ajánljuk fel a "küldd vissza aláírva"
+                          válasz-levelet. Kimenni csak gombnyomásra megy ki. */}
+                      {s.kikuldve_at && typeof s.kikuldve_napja === "number" && (
+                        <span className="basis-full text-[11.5px] text-text-muted">
+                          Kiküldve: {formatIdopont(s.kikuldve_at)} ({s.kikuldve_napja === 0 ? "ma" : `${s.kikuldve_napja} napja`})
+                          {s.emlekezteto_kuldve_at &&
+                            ` · emlékeztető ment: ${formatIdopont(s.emlekezteto_kuldve_at)}${
+                              (s.emlekezteto_db ?? 0) > 1 ? ` (${s.emlekezteto_db}×)` : ""
+                            }`}
+                          {" · "}
+                          {s.emlekezteto_esedekes
+                            ? "az emlékeztető most küldhető"
+                            : typeof s.emlekezteto_hatra_nap === "number" && s.emlekezteto_hatra_nap > 0
+                              ? `${s.emlekezteto_hatra_nap} nap múlva küldhető emlékeztető (${formatIdopont(s.emlekezteto_felajanlhato_at).slice(0, 13)})`
+                              : "emlékeztető nem küldhető (nincs e-mail cím)"}
+                          <button
+                            type="button"
+                            onClick={() => setElonezetId(s.contract_id)}
+                            className="ml-2 text-text-accent hover:underline"
+                          >
+                            Emlékeztető előnézete
+                          </button>
+                        </span>
+                      )}
+                      {canEdit && s.emlekezteto_esedekes && (
+                        <button
+                          type="button"
+                          disabled={busyId === s.szamlazo}
+                          onClick={() => setElonezetId(s.contract_id)}
+                          title={`Válasz-levél az eredeti címre: ${s.emlekezteto_cimzett ?? ""}`}
+                          className="text-[12px] text-text-accent hover:underline disabled:opacity-50"
+                        >
+                          Emlékeztető küldése
+                        </button>
+                      )}
+                    </span>
+                  )}
+                </td>
+                <td className="py-2.5 text-right">
+                  {canDelete && (
+                    <button
+                      type="button"
+                      disabled={busyId === s.szamlazo}
+                      onClick={() => torol(s)}
+                      title="Szerződés törlése - utána újra elkészíthető"
+                      className="rounded-[var(--radius)] p-1 text-text-muted hover:bg-surface-3 hover:text-text-danger disabled:opacity-50"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {/* Az emlékeztető ELŐNÉZETE és SZERKESZTÉSE egy ablakban: a szöveg
+          küldés előtt átírható (a felhasználó kérése), és innen megy ki. */}
+      {elonezetId !== null && (
+        <EmlekeztetoElonezet
+          contractId={elonezetId}
+          nev={szerzodesek.find((x) => x.contract_id === elonezetId)?.full_name ?? ""}
+          kuldheto={canEdit}
+          onClose={() => setElonezetId(null)}
+          onElkuldve={() => router.refresh()}
+        />
+      )}
+    </div>
+  );
+}

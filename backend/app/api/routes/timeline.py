@@ -5,6 +5,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.security import get_current_user
+from app.models.employee import Employee
 from app.models.timeline import TimelineEvent
 from app.schemas.timeline import TimelineEventCreate, TimelineEventRead
 
@@ -18,6 +20,7 @@ def list_events(
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
+    _user: Employee = Depends(get_current_user),
 ):
     stmt = select(TimelineEvent).order_by(TimelineEvent.created_at.desc())
     if entity_type:

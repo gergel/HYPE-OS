@@ -13,7 +13,7 @@ class Callsheet(TimestampMixin, Base):
     __tablename__ = "callsheets"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), nullable=False)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), nullable=False, index=True)
     employee_id: Mapped[int | None] = mapped_column(ForeignKey("employees.id"))
 
     diszpo_pdf_url: Mapped[str | None] = mapped_column(String(500))
