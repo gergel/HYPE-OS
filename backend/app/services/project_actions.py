@@ -92,16 +92,27 @@ class DarabolasHiba(ValueError):
     felhasználó kérése) - a route hibakezelése miatt marad meg."""
 
 
+def utomunka_nev(esemeny: str | None, forgatas_datuma: date | None, projektkod: str | None) -> str:
+    """Az utómunka-anyag neve: <esemény>_<forgatás dátuma ÉÉÉÉ.HH.NN>_<projektkód
+    az első 4 karakter nélkül> (a felhasználó kérése) - pl. HYPE26-0001 kódnál
+    a név vége "26-0001". Rövid (legfeljebb 4 karakteres) kódnál a teljes kód
+    megy a névbe, hogy ne maradjon üresen. A hiányzó részt kihagyja.
+
+    Ugyanez a szabály a projekt oldali "Utómunka" gombnál és az Utómunka
+    oldali felvezetésnél is - így a két helyen sosem tér el a formátum."""
+    datum_resz = forgatas_datuma.strftime("%Y.%m.%d") if forgatas_datuma else ""
+    kod = (projektkod or "").strip()
+    kod_resz = kod[4:] if len(kod) > 4 else kod
+    return "_".join(resz for resz in ((esemeny or "").strip(), datum_resz, kod_resz) if resz)
+
+
 def create_utomunka(db: Session, project: Project, current_user: Employee) -> Deliverable:
     """'Utómunka' gomb: új Deliverable-t hoz létre ehhez a projekthez:
     <Name>_<Forgatás időpontja YYYY.MM.DD>_<Projektkód az első 4 karakter
     nélkül> (a felhasználó kérése) - pl. HYPE26-0001 kódnál a név vége
     "26-0001", nem az eddigi "HYPE". Rövid (legfeljebb 4 karakteres) kódnál
     a teljes kód megy a névbe, hogy ne maradjon üresen."""
-    date_part = project.forgatas_datuma.strftime("%Y.%m.%d") if project.forgatas_datuma else ""
-    kod = project.projektkod_szoveg or ""
-    kod_part = kod[4:] if len(kod) > 4 else kod
-    projekt_neve = "_".join(part for part in (project.nev, date_part, kod_part) if part)
+    projekt_neve = utomunka_nev(project.nev, project.forgatas_datuma, project.projektkod_szoveg)
 
     # DUPLIKÁTUM-VÉDELEM (a felhasználó hibajelzése: egy-egy anyag kétszer
     # jelent meg a listán): ha ehhez a projekthez már létezik pontosan

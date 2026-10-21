@@ -38,6 +38,7 @@ from app.schemas.deliverable_actions import (
 from app.schemas.feedback import FeedbackCreate, FeedbackRead, FeedbackUpdate
 from app.schemas.timesheet import TimesheetCreate, TimesheetRead, TimesheetUpdate
 from app.services import deliverable_actions, notifications, projektkod_kotes, vagoi_jatek
+from app.services.project_actions import utomunka_nev
 
 #: Az utómunka írásánál a DEFAULT_WRITE_ROLES (admin/operator/adminisztráció)
 #: durva szerepkör-kapuja szándékosan nem érvényes - ugyanaz az elv, mint a
@@ -231,6 +232,19 @@ def _vagas_projektkodja(data: dict, db: Session) -> dict:
             ),
         )
     data["projektkod_szoveg"] = kod
+
+    # A NÉV az esemény nevéből, a forgatás dátumából és a projektkódból áll
+    # össze (a felhasználó kérése) - ha nem kész nevet kaptunk. A forgatás
+    # dátuma nem oszlop: szövegként a "Forgatás dátuma" mezőbe kerül.
+    forgatas = data.pop("forgatas_datuma", None)
+    if forgatas is not None:
+        data["forgatas_datuma_notion"] = forgatas.strftime("%Y.%m.%d")
+    if not (data.get("projekt_neve") or "").strip():
+        if not (data.get("esemeny_neve") or "").strip():
+            raise HTTPException(status_code=400, detail="Add meg az esemény nevét - ebből áll össze az anyag neve.")
+        data["projekt_neve"] = utomunka_nev(data["esemeny_neve"], forgatas, kod)
+    if data.get("esemeny_neve") is not None:
+        data["esemeny_neve"] = data["esemeny_neve"].strip() or None
 
     # DUPLIKÁTUM-VÉDELEM (a felhasználó hibajelzése: egy-egy anyag kétszer
     # jelent meg a listán): pontosan ugyanilyen nevű anyag nem vehető fel még

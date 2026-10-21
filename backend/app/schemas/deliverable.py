@@ -27,6 +27,15 @@ class DeliverableBase(BaseModel):
 
 
 class DeliverableCreate(DeliverableBase):
+    #: Az Utómunka oldali felvezetésnél NEM a nevet kérjük be, hanem az
+    #: esemény nevét és a forgatás dátumát - a név ezekből és a projektkódból
+    #: áll össze (<esemény>_<ÉÉÉÉ.HH.NN>_<kód HYPE nélkül>, lásd
+    #: routes/postproduction._vagas_projektkodja). Aki kész nevet küld (pl. az
+    #: AI Assistant), annál az marad.
+    projekt_neve: str | None = None
+    esemeny_neve: str | None = None
+    #: Csak bemenet: a névbe kerül, és szövegként a "Forgatás dátuma" mezőbe.
+    forgatas_datuma: date | None = None
     #: A vágási leírás már FELVEZETÉSKOR is megadható (a felhasználó
     #: hibajelzése: az AI Assistant hiába küldte, a séma némán eldobta).
     vagas_leiras: str | None = None
