@@ -1,5 +1,6 @@
 "use client";
 
+import { useSzovegKerdes } from "@/components/SzovegKerdes";
 import { useMemo, useState } from "react";
 import { authFetch } from "@/lib/authFetch";
 import type { Arajanlat, ArajanlatTetel } from "@/lib/api";
@@ -45,6 +46,7 @@ export function ArajanlatSzerkeszto({
   onVissza: () => void;
   onMentve: () => void;
 }) {
+  const { kerdez, ablak } = useSzovegKerdes();
   const [brand, setBrand] = useState(mentett?.brand ?? "hype");
   const [adat, setAdat] = useState<ArajanlatAdat>(() =>
     mentett ? ajanlatAdatBetoltes(mentett.adat, mentett.brand) : uresAjanlat("hype"),
@@ -147,7 +149,7 @@ export function ArajanlatSzerkeszto({
       const javaslat = sablonkent
         ? mentesiNev || adat.blokkok[0]?.cim || "Ajánlat-sablon"
         : [adat.szam, adat.cimzettNev].filter(Boolean).join(" – ") || "Árajánlat";
-      const beirt = window.prompt(
+      const beirt = await kerdez(
         sablonkent ? "A sablon neve (pl. 1 kamerás esemény videó):" : "Az ajánlat neve a listában:",
         javaslat,
       );
@@ -216,373 +218,376 @@ export function ArajanlatSzerkeszto({
   }, [katalogus]);
 
   return (
-    <div className="aj-szerkeszto">
-      {/* eszköztár - nyomtatásban nem látszik */}
-      <div className="mb-4 flex flex-wrap items-center gap-2 print:hidden">
-        <button type="button" onClick={onVissza} className="btn text-[13px]">
-          ← Vissza a listához
-        </button>
-        <span className="mx-1 h-5 w-px bg-border" />
-        {/* HYPE / ContentBee kapcsoló (a felhasználó kérése) */}
-        {Object.entries(BRAND_BEALLITAS).map(([kulcs, b]) => (
+    <>
+      {ablak}
+      <div className="aj-szerkeszto">
+        {/* eszköztár - nyomtatásban nem látszik */}
+        <div className="mb-4 flex flex-wrap items-center gap-2 print:hidden">
+          <button type="button" onClick={onVissza} className="btn text-[13px]">
+            ← Vissza a listához
+          </button>
+          <span className="mx-1 h-5 w-px bg-border" />
+          {/* HYPE / ContentBee kapcsoló (a felhasználó kérése) */}
+          {Object.entries(BRAND_BEALLITAS).map(([kulcs, b]) => (
+            <button
+              key={kulcs}
+              type="button"
+              onClick={() => brandValtas(kulcs)}
+              className={`rounded-[var(--radius)] border px-3 py-1.5 text-[13px] ${
+                brand === kulcs
+                  ? "border-text-accent/40 bg-bg-accent text-text-accent"
+                  : "border-border text-text-secondary hover:bg-surface-3"
+              }`}
+            >
+              {b.nev}
+            </button>
+          ))}
+          <span className="mx-1 h-5 w-px bg-border" />
           <button
-            key={kulcs}
             type="button"
-            onClick={() => brandValtas(kulcs)}
+            onClick={() => setAdat((a) => ({ ...a, blokkok: [...a.blokkok, uresBlokk()] }))}
+            className="btn text-[13px]"
+          >
+            + Új esemény / blokk
+          </button>
+          <button
+            type="button"
+            onClick={() => mezot("afaLatszik", !adat.afaLatszik)}
+            className="btn text-[13px]"
+          >
+            ÁFA sor {adat.afaLatszik ? "ki" : "be"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setKatalogusNyitva((n) => !n)}
             className={`rounded-[var(--radius)] border px-3 py-1.5 text-[13px] ${
-              brand === kulcs
+              katalogusNyitva
                 ? "border-text-accent/40 bg-bg-accent text-text-accent"
                 : "border-border text-text-secondary hover:bg-surface-3"
             }`}
           >
-            {b.nev}
+            Alap tételek
           </button>
-        ))}
-        <span className="mx-1 h-5 w-px bg-border" />
-        <button
-          type="button"
-          onClick={() => setAdat((a) => ({ ...a, blokkok: [...a.blokkok, uresBlokk()] }))}
-          className="btn text-[13px]"
-        >
-          + Új esemény / blokk
-        </button>
-        <button
-          type="button"
-          onClick={() => mezot("afaLatszik", !adat.afaLatszik)}
-          className="btn text-[13px]"
-        >
-          ÁFA sor {adat.afaLatszik ? "ki" : "be"}
-        </button>
-        <button
-          type="button"
-          onClick={() => setKatalogusNyitva((n) => !n)}
-          className={`rounded-[var(--radius)] border px-3 py-1.5 text-[13px] ${
-            katalogusNyitva
-              ? "border-text-accent/40 bg-bg-accent text-text-accent"
-              : "border-border text-text-secondary hover:bg-surface-3"
-          }`}
-        >
-          Alap tételek
-        </button>
-        <span className="flex-1" />
-        {uzenet && <span className="text-[12.5px] text-text-muted">{uzenet}</span>}
-        {canEdit && (
-          <>
-            <button type="button" disabled={busy} onClick={() => mentes(true)} className="btn text-[13px]">
-              Mentés sablonként
-            </button>
-            <button type="button" disabled={busy} onClick={() => mentes(false)} className="btn btn-primary text-[13px]">
-              {mentettId !== null ? "Mentés" : "Mentés ajánlatként"}
-            </button>
-          </>
-        )}
-        <button type="button" onClick={pdf} className="btn text-[13px]">
-          PDF / nyomtatás
-        </button>
-      </div>
-
-      {/* alap tétel-katalógus panel */}
-      {katalogusNyitva && (
-        <div className="mb-4 rounded-[var(--radius-lg)] border border-border bg-surface-2 p-4 print:hidden">
-          <p className="mb-2 text-[12.5px] text-text-muted">
-            Kattints egy tételre – az utolsó blokkba kerül, a saját szekciójába. A katalógus a lista oldalon
-            szerkeszthető.
-          </p>
-          {katalogusSzekciok.length === 0 && (
-            <p className="text-[13px] text-text-secondary">Még nincs alap tétel felvéve.</p>
+          <span className="flex-1" />
+          {uzenet && <span className="text-[12.5px] text-text-muted">{uzenet}</span>}
+          {canEdit && (
+            <>
+              <button type="button" disabled={busy} onClick={() => mentes(true)} className="btn text-[13px]">
+                Mentés sablonként
+              </button>
+              <button type="button" disabled={busy} onClick={() => mentes(false)} className="btn btn-primary text-[13px]">
+                {mentettId !== null ? "Mentés" : "Mentés ajánlatként"}
+              </button>
+            </>
           )}
-          <div className="flex flex-wrap gap-4">
-            {katalogusSzekciok.map(([szekcio, tetelek]) => (
-              <div key={szekcio} className="min-w-[220px]">
-                <p className="mb-1 text-[11px] uppercase tracking-wide text-text-muted">{szekcio}</p>
-                <div className="flex flex-col gap-1">
-                  {tetelek.map((t) => (
-                    <button
-                      key={t.id}
-                      type="button"
-                      onClick={() => katalogusbol(t)}
-                      className="rounded-[var(--radius)] border border-border bg-surface-1 px-2.5 py-1.5 text-left text-[13px] text-text-primary hover:border-text-accent/50"
-                    >
-                      <span className="font-medium">{t.nev}</span>
-                      {t.egysegar !== null && (
-                        <span className="text-text-muted"> · {osszegSzoveg(t.egysegar)} Ft</span>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
+          <button type="button" onClick={pdf} className="btn text-[13px]">
+            PDF / nyomtatás
+          </button>
         </div>
-      )}
 
-      {/* ---------- maga a lap ---------- */}
-      <div className="aj-wrap">
-        <div className="aj-sheet aj-print-cel">
-          <div className="aj-head">
-            <div>
-              <div className="aj-logo">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={brandBeallitas.logo} alt={`${brandBeallitas.nev} logó`} />
-              </div>
-              <input
-                className="aj-be aj-conev"
-                value={adat.cegnev}
-                onChange={(e) => mezot("cegnev", e.target.value)}
-                placeholder="Cégnév"
-              />
-              <textarea
-                className="aj-be aj-colines"
-                rows={3}
-                value={adat.cegadatok}
-                onChange={(e) => mezot("cegadatok", e.target.value)}
-                placeholder={"Cím\nAdószám\nE-mail · Telefon"}
-              />
-            </div>
-            <div className="aj-doc">
-              <h1>Árajánlat</h1>
-              <div className="aj-meta">
-                <span>Ajánlat sz.</span>
-                <input className="aj-be" value={adat.szam} onChange={(e) => mezot("szam", e.target.value)} placeholder="2026/001" />
-                <span>Kelt</span>
-                <input className="aj-be" value={adat.kelt} onChange={(e) => mezot("kelt", e.target.value)} placeholder="2026.01.01." />
-                <span>Érvényes</span>
-                <input className="aj-be" value={adat.ervenyes} onChange={(e) => mezot("ervenyes", e.target.value)} placeholder="30 napig" />
-                <span>Pénznem</span>
-                <input className="aj-be" value={adat.penznem} onChange={(e) => mezot("penznem", e.target.value)} placeholder="Ft" />
-              </div>
-            </div>
-          </div>
-
-          <div className="aj-rule" />
-
-          <div className="aj-parties">
-            <div>
-              <div className="aj-label">Ajánlat címzettje</div>
-              <input
-                className="aj-be aj-party-nev"
-                value={adat.cimzettNev}
-                onChange={(e) => mezot("cimzettNev", e.target.value)}
-                placeholder="Ügyfél neve"
-              />
-              <textarea
-                className="aj-be aj-party-sorok"
-                rows={3}
-                value={adat.cimzettAdatok}
-                onChange={(e) => mezot("cimzettAdatok", e.target.value)}
-                placeholder={"Kapcsolattartó\nCím\nE-mail"}
-              />
-            </div>
-            <div>
-              <div className="aj-label">Kapcsolattartó nálunk</div>
-              <input
-                className="aj-be aj-party-nev"
-                value={adat.kapcsolatNev}
-                onChange={(e) => mezot("kapcsolatNev", e.target.value)}
-                placeholder="Neved"
-              />
-              <textarea
-                className="aj-be aj-party-sorok"
-                rows={3}
-                value={adat.kapcsolatAdatok}
-                onChange={(e) => mezot("kapcsolatAdatok", e.target.value)}
-                placeholder={"Pozíció\nE-mail · Telefon"}
-              />
-            </div>
-          </div>
-
-          <div className="aj-blocks">
-            {adat.blokkok.map((bl, bi) => (
-              <div key={bl.id} className="aj-block">
-                {adat.blokkok.length > 1 && (
-                  <button
-                    type="button"
-                    className="aj-block-del"
-                    title="Blokk törlése"
-                    onClick={() => {
-                      if (window.confirm("Biztosan törlöd ezt a blokkot a tételeivel együtt?")) {
-                        setAdat((a) => ({ ...a, blokkok: a.blokkok.filter((x) => x.id !== bl.id) }));
-                      }
-                    }}
-                  >
-                    ×
-                  </button>
-                )}
-                <div className="aj-block-head">
-                  <div className="aj-block-cimek">
-                    {tobbBlokk && <div className="aj-idx">{bi + 1}. esemény</div>}
-                    <input
-                      className="aj-be aj-block-title"
-                      value={bl.cim}
-                      onChange={(e) => blokkot(bl.id, (x) => ({ ...x, cim: e.target.value }))}
-                      placeholder="Esemény / projekt megnevezése"
-                    />
-                    <input
-                      className="aj-be aj-block-desc"
-                      value={bl.leiras}
-                      onChange={(e) => blokkot(bl.id, (x) => ({ ...x, leiras: e.target.value }))}
-                      placeholder="Rövid leírás: helyszín, forgatási napok, leadás"
-                    />
+        {/* alap tétel-katalógus panel */}
+        {katalogusNyitva && (
+          <div className="mb-4 rounded-[var(--radius-lg)] border border-border bg-surface-2 p-4 print:hidden">
+            <p className="mb-2 text-[12.5px] text-text-muted">
+              Kattints egy tételre – az utolsó blokkba kerül, a saját szekciójába. A katalógus a lista oldalon
+              szerkeszthető.
+            </p>
+            {katalogusSzekciok.length === 0 && (
+              <p className="text-[13px] text-text-secondary">Még nincs alap tétel felvéve.</p>
+            )}
+            <div className="flex flex-wrap gap-4">
+              {katalogusSzekciok.map(([szekcio, tetelek]) => (
+                <div key={szekcio} className="min-w-[220px]">
+                  <p className="mb-1 text-[11px] uppercase tracking-wide text-text-muted">{szekcio}</p>
+                  <div className="flex flex-col gap-1">
+                    {tetelek.map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => katalogusbol(t)}
+                        className="rounded-[var(--radius)] border border-border bg-surface-1 px-2.5 py-1.5 text-left text-[13px] text-text-primary hover:border-text-accent/50"
+                      >
+                        <span className="font-medium">{t.nev}</span>
+                        {t.egysegar !== null && (
+                          <span className="text-text-muted"> · {osszegSzoveg(t.egysegar)} Ft</span>
+                        )}
+                      </button>
+                    ))}
                   </div>
-                  {tobbBlokk && (
-                    <div className="aj-block-right">
-                      <div className="aj-sum-label">Blokk összesen</div>
-                      <div className="aj-b-sum">
-                        {osszegSzoveg(blokkOsszeg(bl))} {adat.penznem}
-                      </div>
-                    </div>
-                  )}
                 </div>
-
-                <div className="aj-tablescroll">
-                  <table>
-                    <colgroup>
-                      <col />
-                      <col className="aj-c-occ" />
-                      <col className="aj-c-qty" />
-                      <col className="aj-c-price" />
-                      <col className="aj-c-sum" />
-                      <col className="aj-c-act" />
-                    </colgroup>
-                    <thead>
-                      <tr>
-                        <th>Tétel</th>
-                        <th>Alkalom</th>
-                        <th>Mennyiség</th>
-                        <th>Egységár</th>
-                        <th>Teljes ár</th>
-                        <th></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {bl.szekciok.map((sz) => (
-                        <SzekcioSorok
-                          key={sz.id}
-                          blokk={bl}
-                          szekcio={sz}
-                          penznem={adat.penznem}
-                          onSzekcio={(v) => szekciot(bl.id, sz.id, v)}
-                          onTetel={(tetelId, v) => tetelt(bl.id, sz.id, tetelId, v)}
-                          onSzekcioTorles={() =>
-                            blokkot(bl.id, (x) => ({ ...x, szekciok: x.szekciok.filter((y) => y.id !== sz.id) }))
-                          }
-                        />
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                <div className="aj-addrow">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      blokkot(bl.id, (x) => {
-                        const szekciok = x.szekciok.length > 0 ? [...x.szekciok] : [uresSzekcio()];
-                        const utolso = szekciok[szekciok.length - 1];
-                        szekciok[szekciok.length - 1] = { ...utolso, tetelek: [...utolso.tetelek, uresTetel()] };
-                        return { ...x, szekciok };
-                      })
-                    }
-                  >
-                    + Tétel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => blokkot(bl.id, (x) => ({ ...x, szekciok: [...x.szekciok, uresSzekcio()] }))}
-                  >
-                    + Szekció
-                  </button>
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
+        )}
 
-          <div className="aj-sum-wrap">
-            <div className="aj-sum">
-              <div className="aj-row">
-                <span className="aj-k">Részösszeg</span>
-                <span className="aj-v">
-                  {osszegSzoveg(osszeg.reszosszeg)} {adat.penznem}
-                </span>
+        {/* ---------- maga a lap ---------- */}
+        <div className="aj-wrap">
+          <div className="aj-sheet aj-print-cel">
+            <div className="aj-head">
+              <div>
+                <div className="aj-logo">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={brandBeallitas.logo} alt={`${brandBeallitas.nev} logó`} />
+                </div>
+                <input
+                  className="aj-be aj-conev"
+                  value={adat.cegnev}
+                  onChange={(e) => mezot("cegnev", e.target.value)}
+                  placeholder="Cégnév"
+                />
+                <textarea
+                  className="aj-be aj-colines"
+                  rows={3}
+                  value={adat.cegadatok}
+                  onChange={(e) => mezot("cegadatok", e.target.value)}
+                  placeholder={"Cím\nAdószám\nE-mail · Telefon"}
+                />
               </div>
-              <div className={`aj-row${osszeg.kedvezmeny ? "" : " aj-zero"}`}>
-                <span className="aj-k">
-                  Kedvezmény{" "}
-                  <input
-                    className="aj-pct"
-                    value={adat.kedvezmeny}
-                    onChange={(e) => mezot("kedvezmeny", e.target.value)}
-                  />
-                  %
-                </span>
-                <span className="aj-v">
-                  {osszeg.kedvezmeny ? "−" : ""}
-                  {osszegSzoveg(osszeg.kedvezmeny)} {adat.penznem}
-                </span>
+              <div className="aj-doc">
+                <h1>Árajánlat</h1>
+                <div className="aj-meta">
+                  <span>Ajánlat sz.</span>
+                  <input className="aj-be" value={adat.szam} onChange={(e) => mezot("szam", e.target.value)} placeholder="2026/001" />
+                  <span>Kelt</span>
+                  <input className="aj-be" value={adat.kelt} onChange={(e) => mezot("kelt", e.target.value)} placeholder="2026.01.01." />
+                  <span>Érvényes</span>
+                  <input className="aj-be" value={adat.ervenyes} onChange={(e) => mezot("ervenyes", e.target.value)} placeholder="30 napig" />
+                  <span>Pénznem</span>
+                  <input className="aj-be" value={adat.penznem} onChange={(e) => mezot("penznem", e.target.value)} placeholder="Ft" />
+                </div>
               </div>
-              <div className="aj-divider" />
-              <div className="aj-row">
-                <span className="aj-k">Nettó összesen</span>
-                <span className="aj-v">
-                  {osszegSzoveg(osszeg.netto)} {adat.penznem}
-                </span>
+            </div>
+
+            <div className="aj-rule" />
+
+            <div className="aj-parties">
+              <div>
+                <div className="aj-label">Ajánlat címzettje</div>
+                <input
+                  className="aj-be aj-party-nev"
+                  value={adat.cimzettNev}
+                  onChange={(e) => mezot("cimzettNev", e.target.value)}
+                  placeholder="Ügyfél neve"
+                />
+                <textarea
+                  className="aj-be aj-party-sorok"
+                  rows={3}
+                  value={adat.cimzettAdatok}
+                  onChange={(e) => mezot("cimzettAdatok", e.target.value)}
+                  placeholder={"Kapcsolattartó\nCím\nE-mail"}
+                />
               </div>
-              {adat.afaLatszik && (
+              <div>
+                <div className="aj-label">Kapcsolattartó nálunk</div>
+                <input
+                  className="aj-be aj-party-nev"
+                  value={adat.kapcsolatNev}
+                  onChange={(e) => mezot("kapcsolatNev", e.target.value)}
+                  placeholder="Neved"
+                />
+                <textarea
+                  className="aj-be aj-party-sorok"
+                  rows={3}
+                  value={adat.kapcsolatAdatok}
+                  onChange={(e) => mezot("kapcsolatAdatok", e.target.value)}
+                  placeholder={"Pozíció\nE-mail · Telefon"}
+                />
+              </div>
+            </div>
+
+            <div className="aj-blocks">
+              {adat.blokkok.map((bl, bi) => (
+                <div key={bl.id} className="aj-block">
+                  {adat.blokkok.length > 1 && (
+                    <button
+                      type="button"
+                      className="aj-block-del"
+                      title="Blokk törlése"
+                      onClick={() => {
+                        if (window.confirm("Biztosan törlöd ezt a blokkot a tételeivel együtt?")) {
+                          setAdat((a) => ({ ...a, blokkok: a.blokkok.filter((x) => x.id !== bl.id) }));
+                        }
+                      }}
+                    >
+                      ×
+                    </button>
+                  )}
+                  <div className="aj-block-head">
+                    <div className="aj-block-cimek">
+                      {tobbBlokk && <div className="aj-idx">{bi + 1}. esemény</div>}
+                      <input
+                        className="aj-be aj-block-title"
+                        value={bl.cim}
+                        onChange={(e) => blokkot(bl.id, (x) => ({ ...x, cim: e.target.value }))}
+                        placeholder="Esemény / projekt megnevezése"
+                      />
+                      <input
+                        className="aj-be aj-block-desc"
+                        value={bl.leiras}
+                        onChange={(e) => blokkot(bl.id, (x) => ({ ...x, leiras: e.target.value }))}
+                        placeholder="Rövid leírás: helyszín, forgatási napok, leadás"
+                      />
+                    </div>
+                    {tobbBlokk && (
+                      <div className="aj-block-right">
+                        <div className="aj-sum-label">Blokk összesen</div>
+                        <div className="aj-b-sum">
+                          {osszegSzoveg(blokkOsszeg(bl))} {adat.penznem}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="aj-tablescroll">
+                    <table>
+                      <colgroup>
+                        <col />
+                        <col className="aj-c-occ" />
+                        <col className="aj-c-qty" />
+                        <col className="aj-c-price" />
+                        <col className="aj-c-sum" />
+                        <col className="aj-c-act" />
+                      </colgroup>
+                      <thead>
+                        <tr>
+                          <th>Tétel</th>
+                          <th>Alkalom</th>
+                          <th>Mennyiség</th>
+                          <th>Egységár</th>
+                          <th>Teljes ár</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {bl.szekciok.map((sz) => (
+                          <SzekcioSorok
+                            key={sz.id}
+                            blokk={bl}
+                            szekcio={sz}
+                            penznem={adat.penznem}
+                            onSzekcio={(v) => szekciot(bl.id, sz.id, v)}
+                            onTetel={(tetelId, v) => tetelt(bl.id, sz.id, tetelId, v)}
+                            onSzekcioTorles={() =>
+                              blokkot(bl.id, (x) => ({ ...x, szekciok: x.szekciok.filter((y) => y.id !== sz.id) }))
+                            }
+                          />
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="aj-addrow">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        blokkot(bl.id, (x) => {
+                          const szekciok = x.szekciok.length > 0 ? [...x.szekciok] : [uresSzekcio()];
+                          const utolso = szekciok[szekciok.length - 1];
+                          szekciok[szekciok.length - 1] = { ...utolso, tetelek: [...utolso.tetelek, uresTetel()] };
+                          return { ...x, szekciok };
+                        })
+                      }
+                    >
+                      + Tétel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => blokkot(bl.id, (x) => ({ ...x, szekciok: [...x.szekciok, uresSzekcio()] }))}
+                    >
+                      + Szekció
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="aj-sum-wrap">
+              <div className="aj-sum">
                 <div className="aj-row">
+                  <span className="aj-k">Részösszeg</span>
+                  <span className="aj-v">
+                    {osszegSzoveg(osszeg.reszosszeg)} {adat.penznem}
+                  </span>
+                </div>
+                <div className={`aj-row${osszeg.kedvezmeny ? "" : " aj-zero"}`}>
                   <span className="aj-k">
-                    ÁFA <input className="aj-pct" value={adat.afa} onChange={(e) => mezot("afa", e.target.value)} />%
+                    Kedvezmény{" "}
+                    <input
+                      className="aj-pct"
+                      value={adat.kedvezmeny}
+                      onChange={(e) => mezot("kedvezmeny", e.target.value)}
+                    />
+                    %
                   </span>
                   <span className="aj-v">
-                    {osszegSzoveg(osszeg.afa)} {adat.penznem}
+                    {osszeg.kedvezmeny ? "−" : ""}
+                    {osszegSzoveg(osszeg.kedvezmeny)} {adat.penznem}
                   </span>
                 </div>
-              )}
-              <div className="aj-grand">
-                <span className="aj-k">Fizetendő</span>
-                <span className="aj-v">
-                  {osszegSzoveg(osszeg.fizetendo)} {adat.penznem}
-                </span>
+                <div className="aj-divider" />
+                <div className="aj-row">
+                  <span className="aj-k">Nettó összesen</span>
+                  <span className="aj-v">
+                    {osszegSzoveg(osszeg.netto)} {adat.penznem}
+                  </span>
+                </div>
+                {adat.afaLatszik && (
+                  <div className="aj-row">
+                    <span className="aj-k">
+                      ÁFA <input className="aj-pct" value={adat.afa} onChange={(e) => mezot("afa", e.target.value)} />%
+                    </span>
+                    <span className="aj-v">
+                      {osszegSzoveg(osszeg.afa)} {adat.penznem}
+                    </span>
+                  </div>
+                )}
+                <div className="aj-grand">
+                  <span className="aj-k">Fizetendő</span>
+                  <span className="aj-v">
+                    {osszegSzoveg(osszeg.fizetendo)} {adat.penznem}
+                  </span>
+                </div>
+                <p className="aj-vat-note">
+                  {adat.afaLatszik ? "A feltüntetett végösszeg az ÁFA-t tartalmazza." : "Az árak az ÁFA-t nem tartalmazzák."}
+                </p>
               </div>
-              <p className="aj-vat-note">
-                {adat.afaLatszik ? "A feltüntetett végösszeg az ÁFA-t tartalmazza." : "Az árak az ÁFA-t nem tartalmazzák."}
-              </p>
             </div>
-          </div>
 
-          <div className="aj-notes">
-            <div>
-              <div className="aj-label">Az ajánlat tartalmazza</div>
-              <SorLista ertek={adat.tartalmazza} onChange={(v) => mezot("tartalmazza", v)} />
+            <div className="aj-notes">
+              <div>
+                <div className="aj-label">Az ajánlat tartalmazza</div>
+                <SorLista ertek={adat.tartalmazza} onChange={(v) => mezot("tartalmazza", v)} />
+              </div>
+              <div>
+                <div className="aj-label">Feltételek</div>
+                <SorLista ertek={adat.feltetelek} onChange={(v) => mezot("feltetelek", v)} />
+              </div>
             </div>
-            <div>
-              <div className="aj-label">Feltételek</div>
-              <SorLista ertek={adat.feltetelek} onChange={(v) => mezot("feltetelek", v)} />
+
+            <div className="aj-sign">
+              <input className="aj-be aj-sign-line" value={adat.alairo} onChange={(e) => mezot("alairo", e.target.value)} />
+              <input
+                className="aj-be aj-sign-line"
+                value={adat.megrendeloSor}
+                onChange={(e) => mezot("megrendeloSor", e.target.value)}
+              />
             </div>
-          </div>
 
-          <div className="aj-sign">
-            <input className="aj-be aj-sign-line" value={adat.alairo} onChange={(e) => mezot("alairo", e.target.value)} />
-            <input
-              className="aj-be aj-sign-line"
-              value={adat.megrendeloSor}
-              onChange={(e) => mezot("megrendeloSor", e.target.value)}
-            />
-          </div>
-
-          <div className="aj-foot">
-            <input className="aj-be" value={adat.labCeg} onChange={(e) => mezot("labCeg", e.target.value)} placeholder="Cégnév · weboldal" />
-            <input
-              className="aj-be aj-foot-jobb"
-              value={adat.labBank}
-              onChange={(e) => mezot("labBank", e.target.value)}
-              placeholder="Bankszámlaszám"
-            />
+            <div className="aj-foot">
+              <input className="aj-be" value={adat.labCeg} onChange={(e) => mezot("labCeg", e.target.value)} placeholder="Cégnév · weboldal" />
+              <input
+                className="aj-be aj-foot-jobb"
+                value={adat.labBank}
+                onChange={(e) => mezot("labBank", e.target.value)}
+                placeholder="Bankszámlaszám"
+              />
+            </div>
           </div>
         </div>
-      </div>
 
-      <ArajanlatLapStilus />
-    </div>
+        <ArajanlatLapStilus />
+      </div>
+    </>
   );
 }
 

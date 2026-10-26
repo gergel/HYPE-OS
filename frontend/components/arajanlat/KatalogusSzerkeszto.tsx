@@ -1,5 +1,6 @@
 "use client";
 
+import { useSzovegKerdes } from "@/components/SzovegKerdes";
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { Archive, History, Plus, RotateCcw, Search } from "lucide-react";
 import { Card } from "@/components/Card";
@@ -14,6 +15,7 @@ type Tortenet = { id: number; old_price: number | null; new_price: number; chang
  * átárazás a meglévő ajánlatokat NEM írja át (ár-snapshot). */
 export function KatalogusSzerkeszto({ canEdit }: { canEdit: boolean }) {
   const toast = useToast();
+  const { kerdez, ablak } = useSzovegKerdes();
   const [tetelek, setTetelek] = useState<KatalogusTetel[] | null>(null);
   const [kategoriak, setKategoriak] = useState<Kategoria[]>([]);
   const [kereses, setKereses] = useState("");
@@ -100,7 +102,7 @@ export function KatalogusSzerkeszto({ canEdit }: { canEdit: boolean }) {
   }
 
   async function ujKategoria() {
-    const nev = window.prompt("Az új kategória neve:")?.trim();
+    const nev = (await kerdez("Az új kategória neve:"))?.trim();
     if (!nev) return;
     try {
       await kuld("/catalog/categories", "POST", { name: nev });
@@ -132,183 +134,186 @@ export function KatalogusSzerkeszto({ canEdit }: { canEdit: boolean }) {
     .filter((x) => x.sorok.length > 0);
 
   return (
-    <Card
-      title="Tétel-katalógus"
-      actions={
-        canEdit ? (
-          <div className="flex flex-wrap gap-1.5">
-            <button type="button" className="btn btn-ghost text-[12.5px]" onClick={ujKategoria}>
-              + Kategória
+    <>
+      {ablak}
+      <Card
+        title="Tétel-katalógus"
+        actions={
+          canEdit ? (
+            <div className="flex flex-wrap gap-1.5">
+              <button type="button" className="btn btn-ghost text-[12.5px]" onClick={ujKategoria}>
+                + Kategória
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary flex items-center gap-1 text-[12.5px]"
+                onClick={() => setUj({ nev: "", kat: String(kat ?? kategoriak[0]?.id ?? ""), egyseg: "db", ar: "" })}
+              >
+                <Plus size={13} /> Új tétel
+              </button>
+            </div>
+          ) : null
+        }
+      >
+        <p className="mb-3 text-[12.5px] text-text-muted">
+          Az alapárat a katalógus-panel egy kattintással írja be az ajánlatba. Átárazáskor a meglévő ajánlatok nem változnak -
+          a szerkesztőben jelzés mutatja, ha egy sor ára eltér a mostani katalógusártól. A min–max csak tájékoztató.
+        </p>
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <div className="relative min-w-[220px] flex-1">
+            <Search size={13} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted" />
+            <input className="field w-full pl-7" placeholder="Keresés…" value={kereses} onChange={(e) => setKereses(e.target.value)} />
+          </div>
+          <select className="field w-auto" value={kat ?? ""} onChange={(e) => setKat(e.target.value ? Number(e.target.value) : null)} aria-label="Kategória">
+            <option value="">Minden kategória</option>
+            {kategoriak.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+          <label className="flex items-center gap-1.5 text-[12.5px] text-text-secondary">
+            <input type="checkbox" checked={archivaltak} onChange={(e) => setArchivaltak(e.target.checked)} /> archiváltak is
+          </label>
+          {canEdit && (
+            <button type="button" disabled={busy} className="btn btn-ghost text-[12.5px]" onClick={alapadatok} title="A 98 alap tétel, 10 sablon és a standard megjegyzés - a meglévőt és az átírtat nem bántja">
+              Alapadatok betöltése
             </button>
-            <button
-              type="button"
-              className="btn btn-primary flex items-center gap-1 text-[12.5px]"
-              onClick={() => setUj({ nev: "", kat: String(kat ?? kategoriak[0]?.id ?? ""), egyseg: "db", ar: "" })}
-            >
-              <Plus size={13} /> Új tétel
+          )}
+        </div>
+        {hiba && <p className="mb-3 rounded-[var(--radius)] bg-bg-danger px-3 py-2 text-[13px] text-text-danger">{hiba}</p>}
+        {uj && (
+          <div className="mb-4 flex flex-wrap items-end gap-2 rounded-[var(--radius)] border border-border bg-surface-3/50 p-3">
+            <label className="flex min-w-[220px] flex-1 flex-col gap-1 text-[12px] text-text-muted">
+              Név
+              <input className="field" autoFocus value={uj.nev} onChange={(e) => setUj({ ...uj, nev: e.target.value })} />
+            </label>
+            <label className="flex flex-col gap-1 text-[12px] text-text-muted">
+              Kategória
+              <select className="field" value={uj.kat} onChange={(e) => setUj({ ...uj, kat: e.target.value })}>
+                {kategoriak.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-[12px] text-text-muted">
+              Egység
+              <select className="field" value={uj.egyseg} onChange={(e) => setUj({ ...uj, egyseg: e.target.value as Egyseg })}>
+                {EGYSEGEK.map((x) => (
+                  <option key={x.ertek} value={x.ertek}>
+                    {x.cimke}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-[12px] text-text-muted">
+              Alapár (Ft)
+              <input className="field w-32 text-right" inputMode="numeric" value={uj.ar} onChange={(e) => setUj({ ...uj, ar: e.target.value })} />
+            </label>
+            <button type="button" disabled={busy || !uj.nev.trim() || !uj.kat} className="btn btn-primary text-[13px]" onClick={felvesz}>
+              Felvétel
+            </button>
+            <button type="button" className="btn btn-ghost text-[13px]" onClick={() => setUj(null)}>
+              Mégse
             </button>
           </div>
-        ) : null
-      }
-    >
-      <p className="mb-3 text-[12.5px] text-text-muted">
-        Az alapárat a katalógus-panel egy kattintással írja be az ajánlatba. Átárazáskor a meglévő ajánlatok nem változnak -
-        a szerkesztőben jelzés mutatja, ha egy sor ára eltér a mostani katalógusártól. A min–max csak tájékoztató.
-      </p>
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <div className="relative min-w-[220px] flex-1">
-          <Search size={13} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted" />
-          <input className="field w-full pl-7" placeholder="Keresés…" value={kereses} onChange={(e) => setKereses(e.target.value)} />
-        </div>
-        <select className="field w-auto" value={kat ?? ""} onChange={(e) => setKat(e.target.value ? Number(e.target.value) : null)} aria-label="Kategória">
-          <option value="">Minden kategória</option>
-          {kategoriak.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-        <label className="flex items-center gap-1.5 text-[12.5px] text-text-secondary">
-          <input type="checkbox" checked={archivaltak} onChange={(e) => setArchivaltak(e.target.checked)} /> archiváltak is
-        </label>
-        {canEdit && (
-          <button type="button" disabled={busy} className="btn btn-ghost text-[12.5px]" onClick={alapadatok} title="A 98 alap tétel, 10 sablon és a standard megjegyzés - a meglévőt és az átírtat nem bántja">
-            Alapadatok betöltése
-          </button>
         )}
-      </div>
-      {hiba && <p className="mb-3 rounded-[var(--radius)] bg-bg-danger px-3 py-2 text-[13px] text-text-danger">{hiba}</p>}
-      {uj && (
-        <div className="mb-4 flex flex-wrap items-end gap-2 rounded-[var(--radius)] border border-border bg-surface-3/50 p-3">
-          <label className="flex min-w-[220px] flex-1 flex-col gap-1 text-[12px] text-text-muted">
-            Név
-            <input className="field" autoFocus value={uj.nev} onChange={(e) => setUj({ ...uj, nev: e.target.value })} />
-          </label>
-          <label className="flex flex-col gap-1 text-[12px] text-text-muted">
-            Kategória
-            <select className="field" value={uj.kat} onChange={(e) => setUj({ ...uj, kat: e.target.value })}>
-              {kategoriak.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex flex-col gap-1 text-[12px] text-text-muted">
-            Egység
-            <select className="field" value={uj.egyseg} onChange={(e) => setUj({ ...uj, egyseg: e.target.value as Egyseg })}>
-              {EGYSEGEK.map((x) => (
-                <option key={x.ertek} value={x.ertek}>
-                  {x.cimke}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex flex-col gap-1 text-[12px] text-text-muted">
-            Alapár (Ft)
-            <input className="field w-32 text-right" inputMode="numeric" value={uj.ar} onChange={(e) => setUj({ ...uj, ar: e.target.value })} />
-          </label>
-          <button type="button" disabled={busy || !uj.nev.trim() || !uj.kat} className="btn btn-primary text-[13px]" onClick={felvesz}>
-            Felvétel
-          </button>
-          <button type="button" className="btn btn-ghost text-[13px]" onClick={() => setUj(null)}>
-            Mégse
-          </button>
-        </div>
-      )}
-      {tetelek === null ? (
-        <p className="text-[13px] text-text-muted">Betöltés…</p>
-      ) : kategoriankent.length === 0 ? (
-        <p className="text-[13px] text-text-secondary">
-          {tetelek.length === 0 ? "A katalógus üres - az „Alapadatok betöltése” gombbal jön be a 98 alap tétel." : "Nincs találat."}
-        </p>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[980px] text-[13px]">
-            <thead>
-              <tr className="border-b border-border text-left text-text-secondary">
-                <th className="py-1.5 pr-2 font-medium">Tétel</th>
-                <th className="py-1.5 pr-2 font-medium">Alapértelmezett leírás</th>
-                <th className="w-28 py-1.5 pr-2 font-medium">Egység</th>
-                <th className="w-32 py-1.5 pr-2 text-right font-medium">Alapár</th>
-                <th className="w-28 py-1.5 pr-2 text-right font-medium">Min</th>
-                <th className="w-28 py-1.5 pr-2 text-right font-medium">Max</th>
-                <th className="w-20 py-1.5 text-right font-medium" />
-              </tr>
-            </thead>
-            <tbody>
-              {kategoriankent.map(({ kat: c, sorok }) => (
-                <Fragment key={c.id}>
-                  <tr>
-                    <td colSpan={7} className="bg-surface-3/60 px-2 py-1.5 text-[12.5px] font-semibold text-text-primary">
-                      {c.name} <span className="font-normal text-text-muted">({sorok.length})</span>
-                    </td>
-                  </tr>
-                  {sorok.map((t) => (
-                    <Fragment key={t.id}>
-                      <tr className={`border-b border-border align-top ${t.is_active ? "" : "opacity-50"}`}>
-                        <td className="py-1.5 pr-2">
-                          <MentoMezo ertek={t.name} tiltva={!canEdit} onMent={(v) => v.trim() && modosit(t, { name: v.trim() })} className="field w-full py-1" />
-                        </td>
-                        <td className="py-1.5 pr-2">
-                          <MentoMezo tobbsoros ertek={t.default_description} tiltva={!canEdit} onMent={(v) => modosit(t, { default_description: v || null })} className="field w-full resize-y py-1 text-[12.5px]" placeholder="–" />
-                        </td>
-                        <td className="py-1.5 pr-2">
-                          <select className="field w-full py-1" disabled={!canEdit} value={t.unit} onChange={(e) => modosit(t, { unit: e.target.value as Egyseg })}>
-                            {EGYSEGEK.map((x) => (
-                              <option key={x.ertek} value={x.ertek}>
-                                {x.cimke}
-                              </option>
-                            ))}
-                          </select>
-                        </td>
-                        <td className="py-1.5 pr-2">
-                          <MentoSzam ertek={t.base_price} penz tiltva={!canEdit} onMent={(v) => v !== null && modosit(t, { base_price: v })} className="field w-full py-1 text-right font-mono tabular-nums" />
-                        </td>
-                        <td className="py-1.5 pr-2">
-                          <MentoSzam ertek={t.price_min} penz urese tiltva={!canEdit} placeholder="–" onMent={(v) => modosit(t, { price_min: v })} className="field w-full py-1 text-right text-text-muted tabular-nums" />
-                        </td>
-                        <td className="py-1.5 pr-2">
-                          <MentoSzam ertek={t.price_max} penz urese tiltva={!canEdit} placeholder="–" onMent={(v) => modosit(t, { price_max: v })} className="field w-full py-1 text-right text-text-muted tabular-nums" />
-                        </td>
-                        <td className="whitespace-nowrap py-1.5 text-right">
-                          <button type="button" title="Ártörténet" onClick={() => mutatTortenet(t.id)} className="rounded p-1 text-text-muted hover:bg-surface-3">
-                            <History size={14} />
-                          </button>
-                          {canEdit && (
-                            <button type="button" title={t.is_active ? "Archiválás (a meglévő ajánlatok hivatkozása megmarad)" : "Visszaállítás"} onClick={() => archival(t)} className="rounded p-1 text-text-muted hover:bg-surface-3">
-                              {t.is_active ? <Archive size={14} /> : <RotateCcw size={14} />}
+        {tetelek === null ? (
+          <p className="text-[13px] text-text-muted">Betöltés…</p>
+        ) : kategoriankent.length === 0 ? (
+          <p className="text-[13px] text-text-secondary">
+            {tetelek.length === 0 ? "A katalógus üres - az „Alapadatok betöltése” gombbal jön be a 98 alap tétel." : "Nincs találat."}
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[980px] text-[13px]">
+              <thead>
+                <tr className="border-b border-border text-left text-text-secondary">
+                  <th className="py-1.5 pr-2 font-medium">Tétel</th>
+                  <th className="py-1.5 pr-2 font-medium">Alapértelmezett leírás</th>
+                  <th className="w-28 py-1.5 pr-2 font-medium">Egység</th>
+                  <th className="w-32 py-1.5 pr-2 text-right font-medium">Alapár</th>
+                  <th className="w-28 py-1.5 pr-2 text-right font-medium">Min</th>
+                  <th className="w-28 py-1.5 pr-2 text-right font-medium">Max</th>
+                  <th className="w-20 py-1.5 text-right font-medium" />
+                </tr>
+              </thead>
+              <tbody>
+                {kategoriankent.map(({ kat: c, sorok }) => (
+                  <Fragment key={c.id}>
+                    <tr>
+                      <td colSpan={7} className="bg-surface-3/60 px-2 py-1.5 text-[12.5px] font-semibold text-text-primary">
+                        {c.name} <span className="font-normal text-text-muted">({sorok.length})</span>
+                      </td>
+                    </tr>
+                    {sorok.map((t) => (
+                      <Fragment key={t.id}>
+                        <tr className={`border-b border-border align-top ${t.is_active ? "" : "opacity-50"}`}>
+                          <td className="py-1.5 pr-2">
+                            <MentoMezo ertek={t.name} tiltva={!canEdit} onMent={(v) => v.trim() && modosit(t, { name: v.trim() })} className="field w-full py-1" />
+                          </td>
+                          <td className="py-1.5 pr-2">
+                            <MentoMezo tobbsoros ertek={t.default_description} tiltva={!canEdit} onMent={(v) => modosit(t, { default_description: v || null })} className="field w-full resize-y py-1 text-[12.5px]" placeholder="–" />
+                          </td>
+                          <td className="py-1.5 pr-2">
+                            <select className="field w-full py-1" disabled={!canEdit} value={t.unit} onChange={(e) => modosit(t, { unit: e.target.value as Egyseg })}>
+                              {EGYSEGEK.map((x) => (
+                                <option key={x.ertek} value={x.ertek}>
+                                  {x.cimke}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="py-1.5 pr-2">
+                            <MentoSzam ertek={t.base_price} penz tiltva={!canEdit} onMent={(v) => v !== null && modosit(t, { base_price: v })} className="field w-full py-1 text-right font-mono tabular-nums" />
+                          </td>
+                          <td className="py-1.5 pr-2">
+                            <MentoSzam ertek={t.price_min} penz urese tiltva={!canEdit} placeholder="–" onMent={(v) => modosit(t, { price_min: v })} className="field w-full py-1 text-right text-text-muted tabular-nums" />
+                          </td>
+                          <td className="py-1.5 pr-2">
+                            <MentoSzam ertek={t.price_max} penz urese tiltva={!canEdit} placeholder="–" onMent={(v) => modosit(t, { price_max: v })} className="field w-full py-1 text-right text-text-muted tabular-nums" />
+                          </td>
+                          <td className="whitespace-nowrap py-1.5 text-right">
+                            <button type="button" title="Ártörténet" onClick={() => mutatTortenet(t.id)} className="rounded p-1 text-text-muted hover:bg-surface-3">
+                              <History size={14} />
                             </button>
-                          )}
-                        </td>
-                      </tr>
-                      {tortenet?.id === t.id && (
-                        <tr className="border-b border-border bg-surface-3/30">
-                          <td colSpan={7} className="px-3 py-2 text-[12.5px] text-text-secondary">
-                            {tortenet.sorok.length === 0 ? (
-                              "Még nem változott az ára."
-                            ) : (
-                              <ul className="flex flex-col gap-0.5">
-                                {tortenet.sorok.map((h) => (
-                                  <li key={h.id}>
-                                    {(h.changed_at ?? "").slice(0, 16).replace("T", " ")} ·{" "}
-                                    {h.old_price === null ? "felvéve" : `${ft(h.old_price)} →`} <strong>{ft(h.new_price)}</strong>
-                                    {h.changed_by ? ` · ${h.changed_by}` : ""}
-                                  </li>
-                                ))}
-                              </ul>
+                            {canEdit && (
+                              <button type="button" title={t.is_active ? "Archiválás (a meglévő ajánlatok hivatkozása megmarad)" : "Visszaállítás"} onClick={() => archival(t)} className="rounded p-1 text-text-muted hover:bg-surface-3">
+                                {t.is_active ? <Archive size={14} /> : <RotateCcw size={14} />}
+                              </button>
                             )}
                           </td>
                         </tr>
-                      )}
-                    </Fragment>
-                  ))}
-                </Fragment>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </Card>
+                        {tortenet?.id === t.id && (
+                          <tr className="border-b border-border bg-surface-3/30">
+                            <td colSpan={7} className="px-3 py-2 text-[12.5px] text-text-secondary">
+                              {tortenet.sorok.length === 0 ? (
+                                "Még nem változott az ára."
+                              ) : (
+                                <ul className="flex flex-col gap-0.5">
+                                  {tortenet.sorok.map((h) => (
+                                    <li key={h.id}>
+                                      {(h.changed_at ?? "").slice(0, 16).replace("T", " ")} ·{" "}
+                                      {h.old_price === null ? "felvéve" : `${ft(h.old_price)} →`} <strong>{ft(h.new_price)}</strong>
+                                      {h.changed_by ? ` · ${h.changed_by}` : ""}
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    ))}
+                  </Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+    </>
   );
 }

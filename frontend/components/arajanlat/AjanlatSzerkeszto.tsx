@@ -1,5 +1,6 @@
 "use client";
 
+import { useSzovegKerdes } from "@/components/SzovegKerdes";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -84,6 +85,7 @@ export function AjanlatSzerkeszto({
   const router = useRouter();
   const confirm = useConfirm();
   const toast = useToast();
+  const { kerdez, ablak } = useSzovegKerdes();
   const [aj, setAj] = useState<Ajanlat | null>(null);
   const [betoltesHiba, setBetoltesHiba] = useState<string | null>(null);
   const [hiba, setHiba] = useState<string | null>(null);
@@ -283,7 +285,7 @@ export function AjanlatSzerkeszto({
   }
 
   async function ujSzekcio() {
-    const nev = window.prompt("Az új szekció neve (pl. „Eszközök” vagy „2. nap”):")?.trim();
+    const nev = (await kerdez("Az új szekció neve (pl. „Eszközök” vagy „2. nap”):"))?.trim();
     if (!nev) return;
     setUresSzekciok((u) => (u.includes(nev) ? u : [...u, nev]));
     setCelSzekcio(nev);
@@ -298,7 +300,7 @@ export function AjanlatSzerkeszto({
 
   async function sablonkent() {
     if (!aj) return;
-    const nev = window.prompt("A sablon neve:", aj.project_name || aj.template_name || "")?.trim();
+    const nev = (await kerdez("A sablon neve:", aj.project_name || aj.template_name || ""))?.trim();
     if (!nev) return;
     await kiir();
     try {
@@ -355,316 +357,319 @@ export function AjanlatSzerkeszto({
   const alkalomFelirat = aj.occasions_label || "Alkalom";
 
   return (
-    <div className="flex flex-col gap-4">
-      {/* Felső sáv */}
-      <div className="flex flex-wrap items-center gap-2">
-        <Link href="/arajanlatok" className="btn btn-ghost flex items-center gap-1 text-[13px]">
-          <ArrowLeft size={14} /> Ajánlatok
-        </Link>
-        <span className="font-mono text-[15px] font-semibold text-text-primary">{aj.number}</span>
-        {aj.version > 1 && <StatusBadge label={`v${aj.version}`} tone="accent" />}
-        <select
-          value={aj.status}
-          disabled={!irhat}
-          onChange={(e) => fejValtozas({ status: e.target.value })}
-          className="field w-auto py-1 text-[13px]"
-          aria-label="Státusz"
-        >
-          {STATUSZOK.map((x) => (
-            <option key={x.ertek} value={x.ertek}>
-              {x.cimke}
-            </option>
-          ))}
-        </select>
-        <div className="flex overflow-hidden rounded-[var(--radius)] border border-border">
-          {MARKAK.map((m) => (
-            <button
-              key={m.ertek}
-              type="button"
-              disabled={!irhat || folyamatban}
-              onClick={() => m.ertek !== aj.brand && void muvelet(() => kuld<Ajanlat>(`/${id}`, "PATCH", { brand: m.ertek }))}
-              className={`px-2.5 py-1 text-[12.5px] ${aj.brand === m.ertek ? "bg-surface-3 text-text-primary" : "text-text-muted hover:bg-surface-2"}`}
-            >
-              {m.cimke}
-            </button>
-          ))}
-        </div>
-        <MentesJelzo allapot={mentes} />
-        <div className="ml-auto flex flex-wrap items-center gap-1.5">
-          {canCreate && (
-            <>
-              <button type="button" className="btn btn-ghost flex items-center gap-1 text-[12.5px]" onClick={() => uj("duplicate")} title="Új ajánlat (új számmal) ugyanezekkel a sorokkal - pl. 2 vs. 3 kamerás">
-                <Copy size={13} /> Duplikálás variánsként
+    <>
+      {ablak}
+      <div className="flex flex-col gap-4">
+        {/* Felső sáv */}
+        <div className="flex flex-wrap items-center gap-2">
+          <Link href="/arajanlatok" className="btn btn-ghost flex items-center gap-1 text-[13px]">
+            <ArrowLeft size={14} /> Ajánlatok
+          </Link>
+          <span className="font-mono text-[15px] font-semibold text-text-primary">{aj.number}</span>
+          {aj.version > 1 && <StatusBadge label={`v${aj.version}`} tone="accent" />}
+          <select
+            value={aj.status}
+            disabled={!irhat}
+            onChange={(e) => fejValtozas({ status: e.target.value })}
+            className="field w-auto py-1 text-[13px]"
+            aria-label="Státusz"
+          >
+            {STATUSZOK.map((x) => (
+              <option key={x.ertek} value={x.ertek}>
+                {x.cimke}
+              </option>
+            ))}
+          </select>
+          <div className="flex overflow-hidden rounded-[var(--radius)] border border-border">
+            {MARKAK.map((m) => (
+              <button
+                key={m.ertek}
+                type="button"
+                disabled={!irhat || folyamatban}
+                onClick={() => m.ertek !== aj.brand && void muvelet(() => kuld<Ajanlat>(`/${id}`, "PATCH", { brand: m.ertek }))}
+                className={`px-2.5 py-1 text-[12.5px] ${aj.brand === m.ertek ? "bg-surface-3 text-text-primary" : "text-text-muted hover:bg-surface-2"}`}
+              >
+                {m.cimke}
               </button>
-              <button type="button" className="btn btn-ghost flex items-center gap-1 text-[12.5px]" onClick={() => uj("new-version")} title="Ugyanazzal a számmal, eggyel nagyobb verzió">
-                <GitBranch size={13} /> Új verzió
-              </button>
-            </>
-          )}
-          {irhat && (
-            <button type="button" className="btn btn-ghost flex items-center gap-1 text-[12.5px]" onClick={sablonkent}>
-              <Save size={13} /> Mentés sablonként
-            </button>
-          )}
-          <button type="button" className="btn flex items-center gap-1 text-[12.5px]" onClick={() => exportal("xlsx")}>
-            <FileSpreadsheet size={13} /> XLSX
-          </button>
-          <button type="button" className="btn flex items-center gap-1 text-[12.5px]" onClick={() => exportal("pdf")}>
-            <FileText size={13} /> PDF
-          </button>
-          {canDelete && (
-            <button type="button" className="btn btn-ghost p-1.5 text-text-muted hover:text-text-danger" onClick={torol} title="Árajánlat törlése" aria-label="Árajánlat törlése">
-              <Trash2 size={14} />
-            </button>
-          )}
-        </div>
-      </div>
-
-      {(aj.versions.length > 1 || aj.parent) && (
-        <p className="-mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-text-muted">
-          {aj.versions.length > 1 && (
-            <>
-              Verziók:
-              {aj.versions.map((v) =>
-                v.id === aj.id ? (
-                  <span key={v.id} className="font-medium text-text-primary">v{v.version}</span>
-                ) : (
-                  <Link key={v.id} href={`/arajanlatok/${v.id}`} className="text-text-accent hover:underline">
-                    v{v.version}
-                  </Link>
-                ),
-              )}
-            </>
-          )}
-          {aj.parent && aj.parent.number !== aj.number && (
-            <span>
-              · variáns ebből:{" "}
-              <Link href={`/arajanlatok/${aj.parent.id}`} className="text-text-accent hover:underline">
-                {aj.parent.number}
-                {aj.parent.version > 1 ? ` v${aj.parent.version}` : ""}
-              </Link>
-            </span>
-          )}
-          {aj.template_name && <span>· sablon: {aj.template_name}</span>}
-        </p>
-      )}
-
-      {hiba && (
-        <p className="rounded-[var(--radius)] bg-bg-danger px-3 py-2 text-[13px] text-text-danger">
-          {hiba}{" "}
-          <button type="button" className="underline" onClick={() => setHiba(null)}>
-            Bezár
-          </button>
-        </p>
-      )}
-
-      {/* Fejadatok */}
-      <div className="grid gap-3 rounded-[var(--radius-lg)] border border-border bg-surface-2 p-4 md:grid-cols-2 xl:grid-cols-4">
-        <UgyfelValaszto
-          ertek={aj.client}
-          tiltva={!irhat}
-          onValaszt={(u) => fejValtozas({ client_id: u?.id ?? null, client: u ? { id: u.id, nev: u.nev } : null }, { client_id: u?.id ?? null })}
-        />
-        <Mezo cimke="Projekt neve" className="xl:col-span-2">
-          <input className="field" disabled={!irhat} value={aj.project_name} onChange={(e) => fejValtozas({ project_name: e.target.value })} />
-        </Mezo>
-        <Mezo cimke="Helyszín">
-          <input className="field" disabled={!irhat} value={aj.location ?? ""} onChange={(e) => fejValtozas({ location: e.target.value || null })} />
-        </Mezo>
-        <Mezo cimke="Dátum (-tól / -ig)">
-          <div className="flex gap-1.5">
-            <input type="date" className="field min-w-0 flex-1" disabled={!irhat} value={aj.event_date_from ?? ""} onChange={(e) => fejValtozas({ event_date_from: e.target.value || null })} />
-            <input type="date" className="field min-w-0 flex-1" disabled={!irhat} value={aj.event_date_to ?? ""} min={aj.event_date_from ?? undefined} onChange={(e) => fejValtozas({ event_date_to: e.target.value || null })} />
+            ))}
           </div>
-        </Mezo>
-        <Mezo cimke="Árazás">
-          <div className="flex items-center gap-1.5">
-            <select className="field w-auto" disabled={!irhat} value={aj.pricing_mode} onChange={(e) => fejValtozas({ pricing_mode: e.target.value as Ajanlat["pricing_mode"] })}>
-              <option value="one_off">Egyszeri</option>
-              <option value="monthly">Havidíjas</option>
-            </select>
-            {aj.pricing_mode === "monthly" && (
+          <MentesJelzo allapot={mentes} />
+          <div className="ml-auto flex flex-wrap items-center gap-1.5">
+            {canCreate && (
               <>
-                <SzamMezo ertek={aj.months} tiltva={!irhat} egesz min={1} onErtek={(v) => fejValtozas({ months: Math.max(1, Math.round(v)) })} className="w-16" />
-                <span className="text-[12px] text-text-muted">hónap</span>
+                <button type="button" className="btn btn-ghost flex items-center gap-1 text-[12.5px]" onClick={() => uj("duplicate")} title="Új ajánlat (új számmal) ugyanezekkel a sorokkal - pl. 2 vs. 3 kamerás">
+                  <Copy size={13} /> Duplikálás variánsként
+                </button>
+                <button type="button" className="btn btn-ghost flex items-center gap-1 text-[12.5px]" onClick={() => uj("new-version")} title="Ugyanazzal a számmal, eggyel nagyobb verzió">
+                  <GitBranch size={13} /> Új verzió
+                </button>
               </>
             )}
+            {irhat && (
+              <button type="button" className="btn btn-ghost flex items-center gap-1 text-[12.5px]" onClick={sablonkent}>
+                <Save size={13} /> Mentés sablonként
+              </button>
+            )}
+            <button type="button" className="btn flex items-center gap-1 text-[12.5px]" onClick={() => exportal("xlsx")}>
+              <FileSpreadsheet size={13} /> XLSX
+            </button>
+            <button type="button" className="btn flex items-center gap-1 text-[12.5px]" onClick={() => exportal("pdf")}>
+              <FileText size={13} /> PDF
+            </button>
+            {canDelete && (
+              <button type="button" className="btn btn-ghost p-1.5 text-text-muted hover:text-text-danger" onClick={torol} title="Árajánlat törlése" aria-label="Árajánlat törlése">
+                <Trash2 size={14} />
+              </button>
+            )}
           </div>
-        </Mezo>
-        <Mezo cimke="Összesítő sor címkéje">
-          <input className="field" list="aj-osszesito-cimkek" disabled={!irhat || aj.pricing_mode === "monthly"} value={aj.pricing_mode === "monthly" ? `A PROJECT TELJES KÖLTSÉGE ${aj.months} HÓNAPRA` : aj.summary_label ?? ""} onChange={(e) => fejValtozas({ summary_label: e.target.value })} />
-          <datalist id="aj-osszesito-cimkek">
-            {OSSZESITO_CIMKEK.map((c) => (
-              <option key={c} value={c} />
-            ))}
-          </datalist>
-        </Mezo>
-        <Mezo cimke="Belső megjegyzés (nem kerül az ajánlatra)">
-          <input className="field" disabled={!irhat} value={aj.internal_note ?? ""} onChange={(e) => fejValtozas({ internal_note: e.target.value || null })} />
-        </Mezo>
-      </div>
+        </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
-        {/* Tételek */}
-        <div className="min-w-0 rounded-[var(--radius-lg)] border border-border bg-surface-2">
-          <div className="overflow-x-auto">
-            <div className="min-w-[760px]">
-              <div className="grid grid-cols-[22px_minmax(0,1fr)_78px_84px_118px_118px_34px] items-center gap-2 border-b border-border bg-surface-3 px-3 py-2 text-[12px] font-medium text-text-secondary">
-                <span />
-                <span>Tétel/Szolgáltatás</span>
-                <span className="text-right">{alkalomFelirat}</span>
-                <span className="text-right">Mennyiség</span>
-                <span className="text-right">Egységár</span>
-                <span className="text-right">{aj.pricing_mode === "monthly" ? `Teljes ár (${aj.months} hó)` : "Teljes ár"}</span>
-                <span />
-              </div>
-              {csop.length === 0 && (
-                <p className="px-4 py-6 text-center text-[13px] text-text-muted">
-                  Még nincs tétel. Kattints a jobb oldali katalógus egy tételére, vagy adj hozzá egyedi sort.
-                </p>
+        {(aj.versions.length > 1 || aj.parent) && (
+          <p className="-mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-text-muted">
+            {aj.versions.length > 1 && (
+              <>
+                Verziók:
+                {aj.versions.map((v) =>
+                  v.id === aj.id ? (
+                    <span key={v.id} className="font-medium text-text-primary">v{v.version}</span>
+                  ) : (
+                    <Link key={v.id} href={`/arajanlatok/${v.id}`} className="text-text-accent hover:underline">
+                      v{v.version}
+                    </Link>
+                  ),
+                )}
+              </>
+            )}
+            {aj.parent && aj.parent.number !== aj.number && (
+              <span>
+                · variáns ebből:{" "}
+                <Link href={`/arajanlatok/${aj.parent.id}`} className="text-text-accent hover:underline">
+                  {aj.parent.number}
+                  {aj.parent.version > 1 ? ` v${aj.parent.version}` : ""}
+                </Link>
+              </span>
+            )}
+            {aj.template_name && <span>· sablon: {aj.template_name}</span>}
+          </p>
+        )}
+
+        {hiba && (
+          <p className="rounded-[var(--radius)] bg-bg-danger px-3 py-2 text-[13px] text-text-danger">
+            {hiba}{" "}
+            <button type="button" className="underline" onClick={() => setHiba(null)}>
+              Bezár
+            </button>
+          </p>
+        )}
+
+        {/* Fejadatok */}
+        <div className="grid gap-3 rounded-[var(--radius-lg)] border border-border bg-surface-2 p-4 md:grid-cols-2 xl:grid-cols-4">
+          <UgyfelValaszto
+            ertek={aj.client}
+            tiltva={!irhat}
+            onValaszt={(u) => fejValtozas({ client_id: u?.id ?? null, client: u ? { id: u.id, nev: u.nev } : null }, { client_id: u?.id ?? null })}
+          />
+          <Mezo cimke="Projekt neve" className="xl:col-span-2">
+            <input className="field" disabled={!irhat} value={aj.project_name} onChange={(e) => fejValtozas({ project_name: e.target.value })} />
+          </Mezo>
+          <Mezo cimke="Helyszín">
+            <input className="field" disabled={!irhat} value={aj.location ?? ""} onChange={(e) => fejValtozas({ location: e.target.value || null })} />
+          </Mezo>
+          <Mezo cimke="Dátum (-tól / -ig)">
+            <div className="flex gap-1.5">
+              <input type="date" className="field min-w-0 flex-1" disabled={!irhat} value={aj.event_date_from ?? ""} onChange={(e) => fejValtozas({ event_date_from: e.target.value || null })} />
+              <input type="date" className="field min-w-0 flex-1" disabled={!irhat} value={aj.event_date_to ?? ""} min={aj.event_date_from ?? undefined} onChange={(e) => fejValtozas({ event_date_to: e.target.value || null })} />
+            </div>
+          </Mezo>
+          <Mezo cimke="Árazás">
+            <div className="flex items-center gap-1.5">
+              <select className="field w-auto" disabled={!irhat} value={aj.pricing_mode} onChange={(e) => fejValtozas({ pricing_mode: e.target.value as Ajanlat["pricing_mode"] })}>
+                <option value="one_off">Egyszeri</option>
+                <option value="monthly">Havidíjas</option>
+              </select>
+              {aj.pricing_mode === "monthly" && (
+                <>
+                  <SzamMezo ertek={aj.months} tiltva={!irhat} egesz min={1} onErtek={(v) => fejValtozas({ months: Math.max(1, Math.round(v)) })} className="w-16" />
+                  <span className="text-[12px] text-text-muted">hónap</span>
+                </>
               )}
-              {csop.map((c, ci) => (
-                <div key={`${c.szekcio ?? "-"}-${ci}`}>
-                  <SzekcioFej
-                    nev={c.szekcio}
-                    osszeg={c.sorok.filter((x) => !x.is_optional).reduce((t, x) => t + sorOsszeg(x), 0)}
-                    cel={celSzekcio === c.szekcio}
-                    irhat={irhat}
-                    lathato={c.szekcio !== null || csop.length > 1}
-                    onCel={() => setCelSzekcio(c.szekcio)}
-                    onAtnevez={(nev) => szekcioAtnevez(c.szekcio, nev)}
-                    onDrop={() => huzott !== null && mozgat(huzott, c.sorok[0]?.id ?? null, c.szekcio)}
-                  />
-                  {c.sorok.map((sor) => (
-                    <SorKomponens
-                      key={sor.id}
-                      sor={sor}
+            </div>
+          </Mezo>
+          <Mezo cimke="Összesítő sor címkéje">
+            <input className="field" list="aj-osszesito-cimkek" disabled={!irhat || aj.pricing_mode === "monthly"} value={aj.pricing_mode === "monthly" ? `A PROJECT TELJES KÖLTSÉGE ${aj.months} HÓNAPRA` : aj.summary_label ?? ""} onChange={(e) => fejValtozas({ summary_label: e.target.value })} />
+            <datalist id="aj-osszesito-cimkek">
+              {OSSZESITO_CIMKEK.map((c) => (
+                <option key={c} value={c} />
+              ))}
+            </datalist>
+          </Mezo>
+          <Mezo cimke="Belső megjegyzés (nem kerül az ajánlatra)">
+            <input className="field" disabled={!irhat} value={aj.internal_note ?? ""} onChange={(e) => fejValtozas({ internal_note: e.target.value || null })} />
+          </Mezo>
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+          {/* Tételek */}
+          <div className="min-w-0 rounded-[var(--radius-lg)] border border-border bg-surface-2">
+            <div className="overflow-x-auto">
+              <div className="min-w-[760px]">
+                <div className="grid grid-cols-[22px_minmax(0,1fr)_78px_84px_118px_118px_34px] items-center gap-2 border-b border-border bg-surface-3 px-3 py-2 text-[12px] font-medium text-text-secondary">
+                  <span />
+                  <span>Tétel/Szolgáltatás</span>
+                  <span className="text-right">{alkalomFelirat}</span>
+                  <span className="text-right">Mennyiség</span>
+                  <span className="text-right">Egységár</span>
+                  <span className="text-right">{aj.pricing_mode === "monthly" ? `Teljes ár (${aj.months} hó)` : "Teljes ár"}</span>
+                  <span />
+                </div>
+                {csop.length === 0 && (
+                  <p className="px-4 py-6 text-center text-[13px] text-text-muted">
+                    Még nincs tétel. Kattints a jobb oldali katalógus egy tételére, vagy adj hozzá egyedi sort.
+                  </p>
+                )}
+                {csop.map((c, ci) => (
+                  <div key={`${c.szekcio ?? "-"}-${ci}`}>
+                    <SzekcioFej
+                      nev={c.szekcio}
+                      osszeg={c.sorok.filter((x) => !x.is_optional).reduce((t, x) => t + sorOsszeg(x), 0)}
+                      cel={celSzekcio === c.szekcio}
                       irhat={irhat}
-                      katalogus={katalogus}
-                      szekciok={szekcioNevek}
-                      huzott={huzott}
-                      onHuzas={setHuzott}
-                      onDrop={(celId) => huzott !== null && huzott !== celId && mozgat(huzott, celId, c.szekcio)}
-                      onValtozas={(v) => sorValtozas(sor.id, v)}
-                      onDuplikal={() => muvelet(() => kuld<Ajanlat>(`/${id}/items/${sor.id}/duplicate`, "POST"))}
-                      onTorol={() => muvelet(() => kuld<Ajanlat>(`/${id}/items/${sor.id}`, "DELETE"))}
-                      onKatalogusar={() => muvelet(() => kuld<Ajanlat>(`/${id}/refresh-prices`, "POST", { item_ids: [sor.id] }), "Frissítve a katalógusárra.")}
-                      onCsere={(t) => muvelet(() => kuld<Ajanlat>(`/${id}/items/${sor.id}`, "PATCH", { catalog_item_id: t.id }))}
-                      onAthelyez={(sz) => mozgat(sor.id, null, sz)}
+                      lathato={c.szekcio !== null || csop.length > 1}
+                      onCel={() => setCelSzekcio(c.szekcio)}
+                      onAtnevez={(nev) => szekcioAtnevez(c.szekcio, nev)}
+                      onDrop={() => huzott !== null && mozgat(huzott, c.sorok[0]?.id ?? null, c.szekcio)}
                     />
-                  ))}
-                  {irhat && (
-                    <div
-                      className="flex items-center gap-3 border-b border-border px-3 py-1.5 pl-9"
-                      onDragOver={(e) => huzott !== null && e.preventDefault()}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        if (huzott !== null) mozgat(huzott, null, c.szekcio);
-                        setHuzott(null);
-                      }}
-                    >
-                      <button type="button" disabled={folyamatban} onClick={() => ujSor(c.szekcio)} className="flex items-center gap-1 text-[12px] text-text-muted hover:text-text-accent disabled:opacity-50">
-                        <Plus size={12} /> Egyedi sor{c.szekcio ? ` ide (${c.szekcio})` : ""}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ))}
-              {irhat && (
-                <div className="flex flex-wrap items-center gap-3 px-3 py-2.5">
-                  <button type="button" onClick={ujSzekcio} className="btn btn-ghost flex items-center gap-1 text-[12.5px]">
-                    <Plus size={13} /> Új szekció
-                  </button>
-                  {csop.length === 0 && (
-                    <button type="button" onClick={() => ujSor(null)} className="btn btn-ghost flex items-center gap-1 text-[12.5px]">
-                      <Plus size={13} /> Egyedi sor
+                    {c.sorok.map((sor) => (
+                      <SorKomponens
+                        key={sor.id}
+                        sor={sor}
+                        irhat={irhat}
+                        katalogus={katalogus}
+                        szekciok={szekcioNevek}
+                        huzott={huzott}
+                        onHuzas={setHuzott}
+                        onDrop={(celId) => huzott !== null && huzott !== celId && mozgat(huzott, celId, c.szekcio)}
+                        onValtozas={(v) => sorValtozas(sor.id, v)}
+                        onDuplikal={() => muvelet(() => kuld<Ajanlat>(`/${id}/items/${sor.id}/duplicate`, "POST"))}
+                        onTorol={() => muvelet(() => kuld<Ajanlat>(`/${id}/items/${sor.id}`, "DELETE"))}
+                        onKatalogusar={() => muvelet(() => kuld<Ajanlat>(`/${id}/refresh-prices`, "POST", { item_ids: [sor.id] }), "Frissítve a katalógusárra.")}
+                        onCsere={(t) => muvelet(() => kuld<Ajanlat>(`/${id}/items/${sor.id}`, "PATCH", { catalog_item_id: t.id }))}
+                        onAthelyez={(sz) => mozgat(sor.id, null, sz)}
+                      />
+                    ))}
+                    {irhat && (
+                      <div
+                        className="flex items-center gap-3 border-b border-border px-3 py-1.5 pl-9"
+                        onDragOver={(e) => huzott !== null && e.preventDefault()}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          if (huzott !== null) mozgat(huzott, null, c.szekcio);
+                          setHuzott(null);
+                        }}
+                      >
+                        <button type="button" disabled={folyamatban} onClick={() => ujSor(c.szekcio)} className="flex items-center gap-1 text-[12px] text-text-muted hover:text-text-accent disabled:opacity-50">
+                          <Plus size={12} /> Egyedi sor{c.szekcio ? ` ide (${c.szekcio})` : ""}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {irhat && (
+                  <div className="flex flex-wrap items-center gap-3 px-3 py-2.5">
+                    <button type="button" onClick={ujSzekcio} className="btn btn-ghost flex items-center gap-1 text-[12.5px]">
+                      <Plus size={13} /> Új szekció
                     </button>
-                  )}
+                    {csop.length === 0 && (
+                      <button type="button" onClick={() => ujSor(null)} className="btn btn-ghost flex items-center gap-1 text-[12.5px]">
+                        <Plus size={13} /> Egyedi sor
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Összesítő */}
+            <div className="border-t border-border px-4 py-3">
+              <div className="ml-auto flex max-w-[460px] flex-col gap-1.5 text-[13px]">
+                <OsszegSor cimke="Részösszeg" ertek={ft(o.reszosszeg)} />
+                <div className="flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-1.5 text-text-secondary">
+                    Kedvezmény
+                    <SzamMezo ertek={aj.discount_percent} tiltva={!irhat} min={0} max={100} onErtek={(v) => fejValtozas({ discount_percent: Math.min(100, Math.max(0, v)) })} className="w-14 py-0.5 text-[12.5px]" />
+                    % +
+                    <SzamMezo ertek={aj.discount_amount} tiltva={!irhat} egesz min={0} penz onErtek={(v) => fejValtozas({ discount_amount: Math.max(0, Math.round(v)) })} className="w-24 py-0.5 text-[12.5px]" />
+                  </span>
+                  <span className="font-mono text-text-secondary">{o.kedvezmeny ? `−${ft(o.kedvezmeny)}` : "–"}</span>
                 </div>
-              )}
+                <div className="flex items-baseline justify-between gap-2 border-t border-border pt-1.5">
+                  <span className="font-semibold text-text-primary">
+                    {aj.pricing_mode === "monthly" ? `A PROJECT TELJES KÖLTSÉGE ${aj.months} HÓNAPRA` : aj.summary_label || "A PROJECT TELJES KÖLTSÉGE"}
+                    <span className="ml-1.5 text-[11px] font-normal text-text-muted">nettó</span>
+                  </span>
+                  <span className="font-mono text-[15px] font-semibold text-text-primary">{ft(o.netto)}</span>
+                </div>
+                {aj.pricing_mode === "monthly" && <OsszegSor cimke="A PROJECT HAVIDÍJA" ertek={ft(o.havidij)} kiemelt />}
+                <div className="flex items-center justify-between gap-2 text-text-muted">
+                  <span className="flex items-center gap-1.5">
+                    ÁFA
+                    <SzamMezo ertek={aj.vat_percent} tiltva={!irhat} min={0} max={100} onErtek={(v) => fejValtozas({ vat_percent: Math.min(100, Math.max(0, v)) })} className="w-14 py-0.5 text-[12.5px]" />%
+                  </span>
+                  <span className="font-mono">{ft(o.afa)}</span>
+                </div>
+                <OsszegSor cimke="Bruttó" ertek={ft(o.brutto)} halvany />
+                {o.opcionalis > 0 && <OsszegSor cimke="Opcionális tételek (nem része)" ertek={ft(o.opcionalis)} halvany />}
+              </div>
             </div>
           </div>
 
-          {/* Összesítő */}
-          <div className="border-t border-border px-4 py-3">
-            <div className="ml-auto flex max-w-[460px] flex-col gap-1.5 text-[13px]">
-              <OsszegSor cimke="Részösszeg" ertek={ft(o.reszosszeg)} />
-              <div className="flex items-center justify-between gap-2">
-                <span className="flex items-center gap-1.5 text-text-secondary">
-                  Kedvezmény
-                  <SzamMezo ertek={aj.discount_percent} tiltva={!irhat} min={0} max={100} onErtek={(v) => fejValtozas({ discount_percent: Math.min(100, Math.max(0, v)) })} className="w-14 py-0.5 text-[12.5px]" />
-                  % +
-                  <SzamMezo ertek={aj.discount_amount} tiltva={!irhat} egesz min={0} penz onErtek={(v) => fejValtozas({ discount_amount: Math.max(0, Math.round(v)) })} className="w-24 py-0.5 text-[12.5px]" />
-                </span>
-                <span className="font-mono text-text-secondary">{o.kedvezmeny ? `−${ft(o.kedvezmeny)}` : "–"}</span>
-              </div>
-              <div className="flex items-baseline justify-between gap-2 border-t border-border pt-1.5">
-                <span className="font-semibold text-text-primary">
-                  {aj.pricing_mode === "monthly" ? `A PROJECT TELJES KÖLTSÉGE ${aj.months} HÓNAPRA` : aj.summary_label || "A PROJECT TELJES KÖLTSÉGE"}
-                  <span className="ml-1.5 text-[11px] font-normal text-text-muted">nettó</span>
-                </span>
-                <span className="font-mono text-[15px] font-semibold text-text-primary">{ft(o.netto)}</span>
-              </div>
-              {aj.pricing_mode === "monthly" && <OsszegSor cimke="A PROJECT HAVIDÍJA" ertek={ft(o.havidij)} kiemelt />}
-              <div className="flex items-center justify-between gap-2 text-text-muted">
-                <span className="flex items-center gap-1.5">
-                  ÁFA
-                  <SzamMezo ertek={aj.vat_percent} tiltva={!irhat} min={0} max={100} onErtek={(v) => fejValtozas({ vat_percent: Math.min(100, Math.max(0, v)) })} className="w-14 py-0.5 text-[12.5px]" />%
-                </span>
-                <span className="font-mono">{ft(o.afa)}</span>
-              </div>
-              <OsszegSor cimke="Bruttó" ertek={ft(o.brutto)} halvany />
-              {o.opcionalis > 0 && <OsszegSor cimke="Opcionális tételek (nem része)" ertek={ft(o.opcionalis)} halvany />}
-            </div>
+          {/* Katalógus-panel */}
+          <KatalogusPanel
+            tetelek={katalogus}
+            kategoriak={kategoriak}
+            ugyfelArak={ugyfelArak}
+            celSzekcio={celSzekcio}
+            szekciok={szekcioNevek}
+            onCel={setCelSzekcio}
+            tiltva={!irhat || folyamatban}
+            onValaszt={katalogusbol}
+          />
+        </div>
+
+        {/* Megjegyzés */}
+        <div className="rounded-[var(--radius-lg)] border border-border bg-surface-2 p-4">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-[13px] font-medium text-text-primary">Megjegyzés (az ajánlat alján)</p>
+            {irhat && megjegyzesek.length > 0 && (
+              <select
+                className="field w-auto py-1 text-[12.5px]"
+                value=""
+                onChange={async (e) => {
+                  const m = megjegyzesek.find((x) => String(x.id) === e.target.value);
+                  if (!m) return;
+                  if (aj.note_text?.trim() && aj.note_text !== m.text && !(await confirm(`Lecseréled a megjegyzést erre: „${m.name}”?`))) return;
+                  fejValtozas({ note_text: m.text });
+                }}
+                aria-label="Megjegyzés-sablon"
+              >
+                <option value="">Megjegyzés-sablon betöltése…</option>
+                {megjegyzesek.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
+          <AutoTextarea
+            value={aj.note_text ?? ""}
+            disabled={!irhat}
+            onChange={(v) => fejValtozas({ note_text: v || null })}
+            className="field min-h-[90px] w-full text-[12.5px] leading-relaxed"
+          />
         </div>
-
-        {/* Katalógus-panel */}
-        <KatalogusPanel
-          tetelek={katalogus}
-          kategoriak={kategoriak}
-          ugyfelArak={ugyfelArak}
-          celSzekcio={celSzekcio}
-          szekciok={szekcioNevek}
-          onCel={setCelSzekcio}
-          tiltva={!irhat || folyamatban}
-          onValaszt={katalogusbol}
-        />
       </div>
-
-      {/* Megjegyzés */}
-      <div className="rounded-[var(--radius-lg)] border border-border bg-surface-2 p-4">
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <p className="text-[13px] font-medium text-text-primary">Megjegyzés (az ajánlat alján)</p>
-          {irhat && megjegyzesek.length > 0 && (
-            <select
-              className="field w-auto py-1 text-[12.5px]"
-              value=""
-              onChange={async (e) => {
-                const m = megjegyzesek.find((x) => String(x.id) === e.target.value);
-                if (!m) return;
-                if (aj.note_text?.trim() && aj.note_text !== m.text && !(await confirm(`Lecseréled a megjegyzést erre: „${m.name}”?`))) return;
-                fejValtozas({ note_text: m.text });
-              }}
-              aria-label="Megjegyzés-sablon"
-            >
-              <option value="">Megjegyzés-sablon betöltése…</option>
-              {megjegyzesek.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name}
-                </option>
-              ))}
-            </select>
-          )}
-        </div>
-        <AutoTextarea
-          value={aj.note_text ?? ""}
-          disabled={!irhat}
-          onChange={(v) => fejValtozas({ note_text: v || null })}
-          className="field min-h-[90px] w-full text-[12.5px] leading-relaxed"
-        />
-      </div>
-    </div>
+    </>
   );
 }
 
