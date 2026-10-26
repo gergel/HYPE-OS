@@ -121,8 +121,10 @@ def xlsx(db: Session, q: Quote) -> bytes:
     logo = LOGO.get(q.brand)
     if logo and logo.exists():
         img = XlImage(str(logo))
-        arany = 70 / img.height
-        img.height, img.width = 70, int(img.width * arany)
+        # Legfeljebb 70 px magas és 180 px széles (a széles felirat-logó ne
+        # lógjon rá a cégadatokra).
+        arany = min(70 / img.height, 180 / img.width)
+        img.height, img.width = int(img.height * arany), int(img.width * arany)
         ws.add_image(img, "A1")
     for i, sor in enumerate(_ceg() + [f"Ajánlatszám: {q.number}" + (f" (v{q.version})" if q.version > 1 else ""),
                                       f"Kelt: {date.today().strftime('%Y.%m.%d.')}"]):
@@ -312,7 +314,14 @@ def pdf(db: Session, q: Quote) -> bytes:
     elemek: list = []
 
     logo = LOGO.get(q.brand)
-    bal = Image(str(logo), height=20 * mm, width=20 * mm * _kep_arany(logo)) if logo and logo.exists() else Spacer(1, 1)
+    # Legfeljebb 20 mm magas ÉS 50 mm széles: a széles felirat-logó (HYPE)
+    # ne foglalja el a fejléc felét, a kerek/álló logók mérete nem változik.
+    if logo and logo.exists():
+        arany = _kep_arany(logo)
+        logo_szel = min(20 * mm * arany, 50 * mm)
+        bal = Image(str(logo), height=logo_szel / arany, width=logo_szel)
+    else:
+        bal = Spacer(1, 1)
     ceg = "<br/>".join(_esc(x) for x in _ceg() + [
         f"Ajánlatszám: {q.number}" + (f" (v{q.version})" if q.version > 1 else ""),
         f"Kelt: {date.today().strftime('%Y.%m.%d.')}"])
