@@ -66,6 +66,11 @@ def test_felvezetes_esemenybol_datumbol_es_kodbol_rakja_ossze_a_nevet(k):
     # Ugyanazzal a három adattal második anyag nem jön létre (duplikátum-védelem).
     assert c.post(D, json={"esemeny_neve": "TTM Horizon demó", "projektkod_szoveg": "HYPE26-9931",
                            "forgatas_datuma": "2026-10-13"}).status_code != 201
+    # A forgatás dátuma nem kötelező: nélküle a név <esemény>_<kód>.
+    r = c.post(D, json={"esemeny_neve": "TTM Horizon demó", "projektkod_szoveg": "HYPE26-9931"})
+    assert r.status_code == 201, r.text
+    d = db.get(Deliverable, r.json()["id"])
+    assert d.projekt_neve == "TTM Horizon demó_26-9931" and d.forgatas_datuma_notion is None
     # Esemény neve nélkül (és kész név nélkül) nincs miből nevet képezni.
     r = c.post(D, json={"projektkod_szoveg": "HYPE26-9931", "forgatas_datuma": "2026-10-14"})
     assert r.status_code == 400 and "esemény nevét" in r.json()["detail"]

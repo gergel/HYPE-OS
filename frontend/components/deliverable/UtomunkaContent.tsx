@@ -753,11 +753,13 @@ export function UtomunkaContent({
                 // Az anyag NEVÉT nem kérjük be: a szerver rakja össze az
                 // esemény nevéből, a forgatás dátumából és a projektkódból
                 // (pl. "Horizon szöveg_2026.10.13_26-0388", lásd backend
-                // services/project_actions.utomunka_nev).
+                // services/project_actions.utomunka_nev). A forgatás dátuma
+                // nem kötelező (a felhasználó kérése): nélküle a név
+                // <esemény>_<kód>, pl. "Horizon szöveg_26-0388".
                 fields={[
                   { name: "esemeny_neve", label: "Esemény neve", required: true },
                   { name: "projektkod_szoveg", label: "Projektkód", required: true },
-                  { name: "forgatas_datuma", label: "Forgatás dátuma", type: "date", required: true },
+                  { name: "forgatas_datuma", label: "Forgatás dátuma", type: "date" },
                 ]}
               />
             )}
