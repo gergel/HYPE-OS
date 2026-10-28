@@ -90,6 +90,7 @@ export function buildFieldTabs({
   badges = {},
   widgets = {},
   sectionOrder = [],
+  idoKiegeszitok = {},
 }: {
   page: string;
   patchPath: string;
@@ -127,8 +128,24 @@ export function buildFieldTabs({
    * ne ugorjanak át a kártyák betöltés után. Ami nincs benne a mentett
    * listában, az a végére kerül, a természetes sorrendjében. */
   sectionOrder?: string[];
+  /** {dátum mező: időpont mező} - az időpont nem külön mezőként jelenik meg,
+   * hanem a dátum alatt, bekapcsolhatóan (pl. az utómunka határideje
+   * percre pontosan). Az időpont mező így sehol máshol nem látszik. */
+  idoKiegeszitok?: Record<string, string>;
 }): DetailSection[] {
-  const hiddenSet = new Set([...ALWAYS_EXCLUDE_META, ...alwaysHidden]);
+  const hiddenSet = new Set([...ALWAYS_EXCLUDE_META, ...alwaysHidden, ...Object.values(idoKiegeszitok)]);
+  const mezoLista = (keys: string[]) =>
+    toEditableDetailFields(record, [], keys, fieldTypes).map((f) => {
+      const idoKulcs = idoKiegeszitok[f.key];
+      if (!idoKulcs) return f;
+      const ido = record[idoKulcs] ? String(record[idoKulcs]) : null;
+      return {
+        ...f,
+        // Olvasható nézetben is látsszon az időpont a dátum mellett.
+        value: f.rawValue && ido ? `${String(f.rawValue).slice(0, 10)} ${ido.slice(0, 5)}` : f.value,
+        idoKiegeszito: { key: idoKulcs, rawValue: ido },
+      };
+    });
   const widgetKeys = Object.keys(widgets);
   const assignedFieldSet = new Set(dbTabs.flatMap((t) => t.field_keys));
   const otherFields = Object.keys(record).filter((k) => !assignedFieldSet.has(k) && !hiddenSet.has(k));
@@ -161,7 +178,7 @@ export function buildFieldTabs({
             <Card title={title} icon={Icon}>
               <EditableDetailGrid
                 patchPath={patchPath}
-                fields={toEditableDetailFields(record, [], fields, fieldTypes)}
+                fields={mezoLista(fields)}
                 readOnly={!canEdit(pagePermissions, page, t.tab_key)}
                 layout="boxed"
               />
@@ -189,7 +206,7 @@ export function buildFieldTabs({
             <Card title="Egyéb" icon={MoreHorizontal}>
               <EditableDetailGrid
                 patchPath={patchPath}
-                fields={toEditableDetailFields(record, [], visibleOtherFields, fieldTypes)}
+                fields={mezoLista(visibleOtherFields)}
                 readOnly={!canEdit(pagePermissions, page, OTHER_TAB_KEY)}
                 layout="boxed"
               />

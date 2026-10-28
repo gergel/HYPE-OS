@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, time
 
 from pydantic import BaseModel
 
@@ -20,6 +20,8 @@ class DeliverableBase(BaseModel):
     assigned_to_employee_id: int | None = None
     allapot: str | None = None
     hatarido: date | None = None
+    #: A határidő pontos időpontja, ha meg van adva (lásd models/deliverable.py).
+    hatarido_ido: time | None = None
     koltseg: float | None = None
     kesz_anyag_url: str | None = None
     nyersanyag_url: str | None = None
@@ -58,6 +60,7 @@ class DeliverableListItem(BaseModel):
     projekt_neve: str
     allapot: str | None = None
     hatarido: date | None = None
+    hatarido_ido: time | None = None
     assigned_to_employee_id: int | None = None
     #: Kikre van kiosztva (több ember is lehet) - a modell property-jeiből
     #: töltődik (lásd models/deliverable.py); a lista végpont selectinload-dal

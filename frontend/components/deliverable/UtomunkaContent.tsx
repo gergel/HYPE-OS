@@ -43,6 +43,13 @@ function formatDate(value: string | null): string {
   return value ? value.slice(0, 10) : "–";
 }
 
+/** A határidő kiírva: a nap, és ha percre pontosan is meg van adva, mellette
+ * az időpont is (pl. "2026-10-30 14:30"). */
+function formatHatarido(d: Pick<Deliverable, "hatarido" | "hatarido_ido">): string {
+  if (!d.hatarido) return "–";
+  return d.hatarido_ido ? `${formatDate(d.hatarido)} ${d.hatarido_ido.slice(0, 5)}` : formatDate(d.hatarido);
+}
+
 type CalendarProject = { id: number; nev: string; forgatas_datuma: string | null; forgatas_datuma_vege: string | null };
 
 type FutoTimer = { deliverable_id: number; employee_id: number; full_name: string };
@@ -239,6 +246,8 @@ export function UtomunkaContent({
   function mezoErteke(d: Deliverable, kulcs: string): string | null {
     const nyers = (d as unknown as Record<string, unknown>)[kulcs];
     if (nyers === null || nyers === undefined || nyers === "") return null;
+    if (kulcs === "hatarido") return formatHatarido(d);
+    if (kulcs === "hatarido_ido") return String(nyers).slice(0, 5);
     if (kulcs.endsWith("employee_id")) return employeeName.get(Number(nyers)) ?? `#${nyers}`;
     if (typeof nyers === "boolean") return nyers ? "Igen" : "Nem";
     // Szám ezres tagolással (a felhasználó kérése - mindenhol, ahol számot
@@ -279,7 +288,7 @@ export function UtomunkaContent({
     // kiosztás nem itt van: azt a kártya MINDIG mutatja (lásd lent).
     const alapertelmezett = kartyaMezok.length === 0;
     const subtitleParts = alapertelmezett
-      ? [d.hatarido ? `Határidő: ${formatDate(d.hatarido)}` : null].filter((p): p is string => p !== null)
+      ? [d.hatarido ? `Határidő: ${formatHatarido(d)}` : null].filter((p): p is string => p !== null)
       : [];
     const mezok = alapertelmezett
       ? []
@@ -602,7 +611,7 @@ export function UtomunkaContent({
                 key={d.id}
                 type="button"
                 onClick={() => setModalHref(`/utomunka/${d.id}`)}
-                title={d.hatarido ? `Határidő: ${formatDate(d.hatarido)}` : undefined}
+                title={d.hatarido ? `Határidő: ${formatHatarido(d)}` : undefined}
                 className={`flex shrink-0 items-center gap-1.5 rounded-[var(--radius)] border px-2 py-1 text-[12px] hover:bg-surface-3 ${
                   d.prioritas && !lezaroAllapot(d.allapot) ? "border-red-600/60" : "border-border"
                 }`}
@@ -610,7 +619,7 @@ export function UtomunkaContent({
                 <span className="max-w-[220px] truncate text-text-primary">{d.projekt_neve}</span>
                 {d.hatarido && (
                   <span className={lejart ? "font-medium text-text-danger" : "text-text-muted"}>
-                    {formatDate(d.hatarido)}
+                    {formatHatarido(d)}
                   </span>
                 )}
               </button>
@@ -806,9 +815,15 @@ export function UtomunkaContent({
                   header: "Határidő",
                   render: (d) =>
                     canEdit ? (
-                      <EditableTableCell patchPath={`${DELIVERABLE_BASE_PATH}/${d.id}`} field="hatarido" value={d.hatarido} type="date" />
+                      <span className="inline-flex items-center gap-1.5">
+                        <EditableTableCell patchPath={`${DELIVERABLE_BASE_PATH}/${d.id}`} field="hatarido" value={d.hatarido} type="date" />
+                        {/* A pontos időpontot az adatlapon lehet beállítani - itt csak látszik. */}
+                        {d.hatarido && d.hatarido_ido && (
+                          <span className="text-text-muted">{d.hatarido_ido.slice(0, 5)}</span>
+                        )}
+                      </span>
                     ) : (
-                      formatDate(d.hatarido)
+                      formatHatarido(d)
                     ),
                   sortAccessor: (d) => d.hatarido,
                 },

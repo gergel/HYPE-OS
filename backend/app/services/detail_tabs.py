@@ -19,6 +19,12 @@ def get_tabs(db: Session, entity_type: str) -> list[DetailTabConfig]:
     )
 
 
+#: {entitás: {kísérő mező: fő mező}} - a kísérő mező nem önálló mezőként,
+#: hanem a fő mezője részeként jelenik meg az adatlapon (lásd frontend
+#: lib/detailTabs.tsx idoKiegeszitok), így ugyanahhoz a fülhöz tartozik.
+KISERO_MEZOK: dict[str, dict[str, str]] = {"deliverable": {"hatarido_ido": "hatarido"}}
+
+
 def get_field_tab_map(db: Session, entity_type: str) -> dict[str, str]:
     """{mezőnév: fül_kulcs} - amit egyik konfigurált fül sem tartalmaz, azt a
     hívó (pl. crud_router update_item) OTHER_TAB_KEY-ként kezelje."""
@@ -26,6 +32,11 @@ def get_field_tab_map(db: Session, entity_type: str) -> dict[str, str]:
     for tab in get_tabs(db, entity_type):
         for field_key in tab.field_keys or []:
             result[field_key] = tab.tab_key
+    # A kísérő mezők (pl. a határidő pontos időpontja) a fő mezőjükkel együtt
+    # szerkeszthetők a felületen, ezért a jogosultság is a fő mező füléé.
+    for kisero, fo in KISERO_MEZOK.get(entity_type, {}).items():
+        if kisero not in result and fo in result:
+            result[kisero] = result[fo]
     return result
 
 

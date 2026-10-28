@@ -206,6 +206,85 @@ function EditableCell({ patchPath, field, boxed = false }: { patchPath: string; 
   );
 }
 
+/** Egy dátum mező alatti, NEM kötelező időpont (óra:perc) - alapból ki van
+ * kapcsolva, a pipával lehet bekapcsolni, és akkor percre pontosan megadni
+ * (a felhasználó kérése az utómunka határidejénél). Kikapcsoláskor az
+ * időpont törlődik, a dátum marad. Csak akkor jelenik meg, ha már van
+ * dátum - időpontnak nap nélkül nincs értelme. */
+function IdoKiegeszito({ patchPath, field }: { patchPath: string; field: EditableDetailField }) {
+  const router = useRouter();
+  const kulcs = field.idoKiegeszito?.key ?? "";
+  const mentett = field.idoKiegeszito?.rawValue ? field.idoKiegeszito.rawValue.slice(0, 5) : "";
+  const [bekapcsolva, setBekapcsolva] = useState(mentett !== "");
+  const [ertek, setErtek] = useState(mentett);
+  const [busy, setBusy] = useState(false);
+
+  // A szerverről frissült érték (pl. másik fülön állították be) utolérje a mezőt.
+  const [elozoMentett, setElozoMentett] = useState(mentett);
+  if (elozoMentett !== mentett) {
+    setElozoMentett(mentett);
+    setErtek(mentett);
+    if (mentett) setBekapcsolva(true);
+  }
+
+  if (!field.editable || field.rawValue === null || field.rawValue === "") return null;
+
+  async function ment(uj: string | null) {
+    if ((uj ?? "") === mentett) return;
+    setBusy(true);
+    try {
+      const res = await authFetch(patchPath, { method: "PATCH", body: JSON.stringify({ [kulcs]: uj }) });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        alert(`Sikertelen mentés: ${detail?.detail ?? res.status}`);
+        return;
+      }
+      router.refresh();
+    } catch (err) {
+      alert(`Sikertelen mentés (hálózati hiba): ${err}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-1 flex min-h-[32px] flex-wrap items-center gap-3 text-[12.5px] text-text-secondary">
+      <label className="inline-flex cursor-pointer items-center gap-1.5">
+        <input
+          type="checkbox"
+          checked={bekapcsolva}
+          disabled={busy}
+          onChange={(e) => {
+            setBekapcsolva(e.target.checked);
+            if (!e.target.checked) {
+              setErtek("");
+              void ment(null);
+            }
+          }}
+          className="h-4 w-4 accent-[var(--color-text-accent)]"
+        />
+        Pontos időpont (óra:perc)
+      </label>
+      {bekapcsolva && (
+        <input
+          type="time"
+          aria-label="Időpont"
+          value={ertek}
+          disabled={busy}
+          autoFocus={mentett === ""}
+          onChange={(e) => setErtek(e.target.value)}
+          onBlur={() => void ment(ertek || null)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") void ment(ertek || null);
+            if (e.key === "Escape") setErtek(mentett);
+          }}
+          className="field w-[120px]"
+        />
+      )}
+    </div>
+  );
+}
+
 /** A DetailGrid szerkeszthető változata - Notion-stílusú, egymás alatt
  * elrendezett mezőlista (nem többoszlopos rács), hogy a kapcsolódó adatok
  * egyben, átláthatóan legyenek olvashatók (lásd referenciakép). Minden mező
@@ -238,6 +317,7 @@ export function EditableDetailGrid({
           <div key={f.key} className={`flex flex-col gap-1.5 ${f.wide ? "sm:col-span-2" : ""}`}>
             <dt className="t-label">{f.label}</dt>
             <EditableCell patchPath={patchPath} field={f} boxed />
+            {f.idoKiegeszito && <IdoKiegeszito patchPath={patchPath} field={f} />}
           </div>
         ))}
       </dl>
@@ -251,6 +331,7 @@ export function EditableDetailGrid({
           <dt className="shrink-0 text-[13px] text-text-muted sm:w-52">{f.label}</dt>
           <div className="min-w-0 flex-1">
             <EditableCell patchPath={patchPath} field={f} />
+            {f.idoKiegeszito && <IdoKiegeszito patchPath={patchPath} field={f} />}
           </div>
         </div>
       ))}

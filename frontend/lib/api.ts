@@ -413,6 +413,9 @@ export type Deliverable = {
   projekt_neve: string;
   allapot: string | null;
   hatarido: string | null;
+  /** A határidő pontos időpontja ("HH:MM:SS"), ha percre pontosan is meg
+   * van adva - nem kötelező, alapból a határidő csak egy nap. */
+  hatarido_ido?: string | null;
   anyag_kikuldve: boolean;
   vago_employee_id: number | null;
   assigned_to_employee_id: number | null;
