@@ -200,7 +200,7 @@ def _csak_a_sajat_anyagai(stmt, db: Session, user: Employee):
     return stmt.where(Deliverable.id.in_(engedett or {0}))
 
 
-def _vagas_projektkodja(data: dict, db: Session) -> dict:
+def _vagas_projektkodja(data: dict, db: Session, current_user: Employee) -> dict:
     """Új vágásnál KÖTELEZŐ a projektkód - és ha projekthez vesszük fel, akkor
     a projektét örökli.
 
@@ -276,6 +276,12 @@ def _vagas_projektkodja(data: dict, db: Session) -> dict:
     if not (data.get("allapot") or "").strip():
         data["allapot"] = _beerkezo_allapot(db)
     _leiras_mezo_atnevezes(data)
+    # KI VEZETTE FEL (a felhasználó kérése): az adatlapon látszódjon, ki hozta
+    # létre az utómunkát. A projekt oldali "Utómunka" gomb eddig is beírta
+    # (services/project_actions.create_utomunka), az Utómunka oldali
+    # felvezetés viszont nem - ott is a bejelentkezett ember a felvezető.
+    if not data.get("aki_felvezette_employee_id"):
+        data["aki_felvezette_employee_id"] = current_user.id
     return data
 
 

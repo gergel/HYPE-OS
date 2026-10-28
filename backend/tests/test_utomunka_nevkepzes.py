@@ -85,3 +85,11 @@ def test_projekt_oldali_gomb_ugyanazt_a_formatumot_adja(k):
     db.add(p)
     db.flush()
     assert create_utomunka(db, p, k["admin"]).projekt_neve == "Projekt gomb demó_2026.10.15_26-9932"
+
+
+def test_felvezetes_rogziti_ki_vezette_fel(k):
+    c, db, admin = k["c"], k["db"], k["admin"]
+    r = c.post(D, json={"esemeny_neve": "Felvezető demó", "projektkod_szoveg": "HYPE26-9933"})
+    assert r.status_code == 201, r.text
+    assert r.json()["aki_felvezette_employee_id"] == admin.id
+    assert db.get(Deliverable, r.json()["id"]).aki_felvezette_employee_id == admin.id
