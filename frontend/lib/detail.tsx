@@ -99,6 +99,10 @@ export type EditableDetailField = DetailField & {
   options?: string[];
   /** Select mezőnél: a listán kívüli, új érték is felvehető helyben. */
   allowNew?: boolean;
+  /** Dátum mezőnél: a hozzá tartozó, NEM kötelező időpont-mező (pl. az
+   * utómunka határidejének óra:perce) - a dátum alatt egy kapcsolóval
+   * bekapcsolható (lásd EditableDetailGrid IdoKiegeszito). */
+  idoKiegeszito?: { key: string; rawValue: string | null };
 };
 
 const DATE_KEY_PATTERN = /datum|date|hatarido|keltezes/i;

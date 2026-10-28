@@ -167,6 +167,9 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
     fieldTypes,
     pagePermissions,
     alwaysHidden: HIDDEN_FIELDS,
+    // A határidő alapból csak nap; alatta kapcsolható be a percre pontos
+    // időpont (a felhasználó kérése).
+    idoKiegeszitok: { hatarido: "hatarido_ido" },
     extraTabs: [
       {
         key: "kiosztas",

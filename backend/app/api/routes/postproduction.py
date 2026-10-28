@@ -402,6 +402,11 @@ def _kovesd_a_vagas_projektkodjat(obj: Deliverable, data: dict, db: Session, cur
     # A `leiras` kulcs itt is a vagas_leiras oszlopot jelenti (lásd
     # _leiras_mezo_atnevezes) - PATCH-nél is, ne csak létrehozáskor.
     _leiras_mezo_atnevezes(data)
+    # A határidő pontos időpontja dátum nélkül értelmetlen: a határidő
+    # törlése az időpontot is viszi (különben egy új dátum a régi órát
+    # örökölné észrevétlenül).
+    if "hatarido" in data and not data["hatarido"]:
+        data["hatarido_ido"] = None
     _ellenorzeshez_kell_visszajelzes(obj, data, db, current_user)
     if "projektkod_szoveg" not in data:
         return

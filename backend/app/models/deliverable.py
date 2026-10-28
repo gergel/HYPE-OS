@@ -1,6 +1,6 @@
-from datetime import date, datetime
+from datetime import date, datetime, time
 
-from sqlalchemy import JSON, Boolean, Column, Date, DateTime, ForeignKey, Numeric, String, Table, Text
+from sqlalchemy import JSON, Boolean, Column, Date, DateTime, ForeignKey, Numeric, String, Table, Text, Time
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -53,6 +53,13 @@ class Deliverable(TimestampMixin, Base):
     #: kapcsolója állítja (lásd frontend PrioritasKapcsolo).
     prioritas: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     hatarido: Mapped[date | None] = mapped_column(Date)
+    #: A határidő PONTOS időpontja (óra:perc) - NEM kötelező (a felhasználó
+    #: kérése): alapból a határidő csak egy nap, az adatlapon bekapcsolható,
+    #: hogy percre pontosan is meg lehessen adni. Külön oszlop, hogy a csak
+    #: dátumos határidők (és minden rájuk épülő lejárat-számítás) változatlanok
+    #: maradjanak. Dátum nélkül nincs értelme - a határidő törlése ezt is törli
+    #: (lásd routes/postproduction._kovesd_a_vagas_projektkodjat).
+    hatarido_ido: Mapped[time | None] = mapped_column(Time, comment="Határidő időpontja")
     koltseg: Mapped[float | None] = mapped_column(Numeric(12, 2))
     kesz_anyag_url: Mapped[str | None] = mapped_column(String(500))
     nyersanyag_url: Mapped[str | None] = mapped_column(String(500))
