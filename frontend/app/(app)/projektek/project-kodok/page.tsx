@@ -399,6 +399,9 @@ export default async function ProjectKodokPage({
         // fut, és a valóságban "2026. május" vagy "két hétvégén" a pontos
         // válasz - a napokat úgyis a projektek hordozzák.
         { name: "datum_megjegyzes", label: "Dátum megjegyzés", placeholder: "Pl. 2026. május" },
+        // A HELYSZÍN nem kötelező (a felhasználó kérése): ha már tudjuk,
+        // felvételkor megadható, különben az adatlapon/listán utólag.
+        { name: "helyszin", label: "Helyszín", placeholder: "Pl. Budapest, Akvárium Klub" },
         // A STÁTUSZ felvételkor KÖTELEZŐ (a felhasználó kérése): státusz
         // nélkül a kód a Dashboard „Projektek státusza” grafikonján „Nincs
         // státusz”-ként lógna, és utólag könnyű elfelejteni beállítani.

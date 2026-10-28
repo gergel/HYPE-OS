@@ -13,6 +13,9 @@ class ProjectCodeBase(BaseModel):
     #: (lásd models/project_code.py).
     client_id: int | None = None
     contract_id: int | None = None
+    #: Opcionális: a felvételkor megadható (a felhasználó kérése), de nem
+    #: kötelező - sokszor még nem dőlt el, hol lesz a munka.
+    helyszin: str | None = None
     datum: date | None = None
     #: A dátum MEGJEGYZÉSE ("2026. május", "két hétvégén") - a felvételkor ezt
     #: kérjük a naptári dátum helyett, mert egy projektkód alatt több forgatás
