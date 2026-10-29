@@ -118,6 +118,9 @@ export type Ajanlat = {
   created_at: string | null;
   updated_at: string | null;
   sent_at: string | null;
+  /** Régi (Drive-ról importált) ajánlat forrása: „2025/HYPE_ÁRAJÁNLAT_….xlsx”. */
+  legacy_source: string | null;
+  legacy_drive_id: string | null;
   items: AjanlatSor[];
   totals: Osszesito;
   versions: { id: number; version: number; status: string; net_total: number; created_at: string | null }[];
@@ -137,6 +140,7 @@ export type AjanlatListaElem = {
   status: string;
   pricing_mode: string;
   net_total: number;
+  legacy_source: string | null;
   created_at: string | null;
   updated_at: string | null;
 };

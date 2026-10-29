@@ -36,8 +36,17 @@ A specifikáció: `HYPE_OS_arajanlat_keszito_PROMPT.md` (a felhasználótól). A
   - sorok katalógusból vagy egyedi sorként, alapértelmezett alkalom és
     mennyiség, árfelülírás, opcionális jelölő, sorrend;
   - „Új ajánlat ebből”.
-- **Régi ajánlatok** (`/arajanlatok/regi`): a korábbi, JSON-alapú szerkesztő
-  mentett ajánlatai változatlanul megnyithatók és szerkeszthetők.
+- **Régi ajánlatok** (`/arajanlatok/regi`):
+  - a Google Drive „árajánlatok” mappájának Excelben készült ajánlatai (2023–2026,
+    493 db), a szerkesztőben a megszokott kinézettel. Átírva az ajánlatba
+    mentődnek, a „Mentés újként” gomb új számmal, új ajánlatként menti őket. A
+    szerkesztő linkel az eredeti Drive-fájlra; a belső megjegyzésben az eredeti
+    táblázat összesítői is ott vannak. A fő listában a „Forrás” szűrővel érhetők el.
+  - Az import: `scripts/regi_arajanlatok_kinyerese.py` (XLSX → `app/quotes/regi_ajanlatok.json`),
+    a betöltést a `r1g2i3a4j5n6` migráció végzi (idempotens, `quotes.legacy_source` alapján).
+    Kimaradt, mert nem árajánlat-táblázat: ártáblák, ajánlattételi mellékletek,
+    ajánlatkérők; a PDF / Word fájlok az Excelek másolatai.
+  - alatta a korábbi, JSON-alapú szerkesztő mentett ajánlatai változatlanul.
 
 ## Szabályok
 
@@ -48,10 +57,12 @@ A specifikáció: `HYPE_OS_arajanlat_keszito_PROMPT.md` (a felhasználótól). A
   (a részösszeg százaléka + fix összeg, legfeljebb a részösszegig).
 - **Ár-snapshot:** a katalógusár a hozzáadáskor bemásolódik. Átárazáskor a
   meglévő ajánlatok nem változnak, az ártörténet megmarad.
-- **Számozás:** `HYPE-2026-0001`, `CB-2026-0001` – márkánként, évente újraindul.
-  - A „Duplikálás variánsként” új számot ad.
+- **Számozás:** év-sorszám, pl. `2026-001` (2026-10-29 óta; korábban `HYPE-2026-0001`,
+  ami túlságosan hasonlított a projektkódra). Márkától független, évente újraindul.
+  A `r1g2i3a4j5n6` migráció minden meglévő ajánlatot időrendben átszámozott.
+  - A „Duplikálás variánsként” (régi ajánlatnál „Mentés újként”) új számot ad.
   - Az „Új verzió” ugyanazt a számot adja, eggyel nagyobb verzióval.
-  - Márkaváltáskor az ajánlat új számot kap, ha még nincs másik verziója.
+  - Márkaváltáskor a szám nem változik.
 - **Export:**
   - Fájlnév: `HYPE_ÁRAJÁNLAT_<ÜGYFÉL> - <PROJEKT NEVE>.xlsx`, illetve `CB_…`.
   - Az XLSX „Teljes ár” oszlopa képlet (`=B*C*D`), a végösszeg `=SUM(...)`.

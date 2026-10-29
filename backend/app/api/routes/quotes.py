@@ -118,6 +118,7 @@ def _ajanlat(db: Session, q: Quote) -> dict:
         "created_at": q.created_at.isoformat() if q.created_at else None,
         "updated_at": q.updated_at.isoformat() if q.updated_at else None,
         "sent_at": q.sent_at.isoformat() if q.sent_at else None,
+        "legacy_source": q.legacy_source, "legacy_drive_id": q.legacy_drive_id,
         "items": [_sor(i, katalogus) for i in sorted(q.items, key=lambda x: x.sort_order)],
         "totals": S.osszegzes(q).dict(),
         "versions": [{"id": v.id, "version": v.version, "status": v.status, "net_total": v.net_total,
@@ -132,6 +133,7 @@ def _lista_elem(q: Quote, ugyfelek: dict[int, str]) -> dict:
         "event_date_from": q.event_date_from.isoformat() if q.event_date_from else None,
         "event_date_to": q.event_date_to.isoformat() if q.event_date_to else None,
         "location": q.location, "status": q.status, "pricing_mode": q.pricing_mode, "net_total": q.net_total,
+        "legacy_source": q.legacy_source,
         "created_at": q.created_at.isoformat() if q.created_at else None,
         "updated_at": q.updated_at.isoformat() if q.updated_at else None,
     }
@@ -547,11 +549,11 @@ def alapadatok(db: Session = Depends(get_db), _u: Employee = Depends(_jog("edit"
 def ajanlatok(
     status: str | None = None, brand: str | None = None, client_id: int | None = None,
     date_from: date | None = None, date_to: date | None = None, q: str | None = None,
-    limit: int = Query(default=500, le=2000),
+    regi: bool | None = None, limit: int = Query(default=500, le=2000),
     db: Session = Depends(get_db), _u: Employee = Depends(_jog("view")),
 ):
     sorok = S.lista(db, status=status, brand=brand, client_id=client_id, datum_tol=date_from, datum_ig=date_to,
-                    q=q, limit=limit)
+                    q=q, regi=regi, limit=limit)
     ids = {x.client_id for x in sorok if x.client_id}
     ugyfelek = dict(db.execute(select(Client.id, Client.nev).where(Client.id.in_(ids))).all()) if ids else {}
     return [_lista_elem(x, ugyfelek) for x in sorok]

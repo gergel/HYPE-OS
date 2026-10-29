@@ -27,7 +27,8 @@ from app.models.quote import (
 )
 from app.quotes.szamitas import Osszesites, osszesit
 
-SZAM_ELOTAG = {"HYPE": "HYPE", "CB": "CB"}
+#: A sorszám-számláló kulcsa: 2026-10-29 óta a számozás márkától független.
+SZAMLALO = "ALL"
 ALAP_CIMKE = "A PROJECT TELJES KÖLTSÉGE"
 
 
@@ -51,26 +52,33 @@ def _ellenoriz(ertek, megengedett: tuple[str, ...], mit: str):
 # ── Számozás ─────────────────────────────────────────────────────────────────
 
 
-def kovetkezo_szam(db: Session, brand: str, ev: int | None = None) -> str:
-    """Évente újrainduló sorszám márkánként: HYPE-2026-0001, CB-2026-0001."""
-    _ellenoriz(brand, BRANDEK, "márka")
+def szam_formatum(ev: int, sorszam: int) -> str:
+    """Év-sorszám: 2026-001 (999 fölött 2026-1000) - nem hasonlít a
+    projektkódra (HYPE26-0388), és márkától független."""
+    return f"{ev}-{sorszam:03d}"
+
+
+def kovetkezo_szam(db: Session, brand: str | None = None, ev: int | None = None) -> str:
+    """Évente újrainduló, márkától független sorszám: 2026-001, 2026-002…
+    (A `brand` csak a régi hívások miatt maradt paraméter.)"""
+    if brand is not None:
+        _ellenoriz(brand, BRANDEK, "márka")
     ev = ev or _most().year
     sz = db.scalar(
         select(QuoteNumberCounter)
-        .where(QuoteNumberCounter.brand == brand, QuoteNumberCounter.year == ev)
+        .where(QuoteNumberCounter.brand == SZAMLALO, QuoteNumberCounter.year == ev)
         .with_for_update()
     )
     if sz is None:
         # Első ajánlat az évben: a meglévő számokból indulunk (ha valaki kézzel
         # vitt fel számot), különben 1-ről.
-        elotag = f"{SZAM_ELOTAG[brand]}-{ev}-"
-        utolso = db.scalar(select(func.max(Quote.number)).where(Quote.number.like(f"{elotag}%")))
-        kezdo = int(utolso.rsplit("-", 1)[-1]) if utolso and utolso.rsplit("-", 1)[-1].isdigit() else 0
-        sz = QuoteNumberCounter(brand=brand, year=ev, last=kezdo)
+        szamok = db.scalars(select(Quote.number).where(Quote.number.like(f"{ev}-%"))).all()
+        kezdo = max((int(n.split("-", 1)[1]) for n in szamok if n.split("-", 1)[1].isdigit()), default=0)
+        sz = QuoteNumberCounter(brand=SZAMLALO, year=ev, last=kezdo)
         db.add(sz)
     sz.last += 1
     db.flush()
-    return f"{SZAM_ELOTAG[brand]}-{ev}-{sz.last:04d}"
+    return szam_formatum(ev, sz.last)
 
 
 # ── Összegzés ────────────────────────────────────────────────────────────────
@@ -184,13 +192,7 @@ def letrehoz(db: Session, user: Employee | None, adat: dict) -> Quote:
 
 def modosit(db: Session, q: Quote, adat: dict) -> Quote:
     _fej_ellenorzes(db, adat)
-    if adat.get("brand") and adat["brand"] != q.brand:
-        # A szám márkánként fut: márkaváltásnál új számot kap - de csak ha még
-        # nincs másik verziója ugyanezen a számon.
-        tobb = db.scalar(select(func.count()).select_from(Quote).where(Quote.number == q.number, Quote.id != q.id))
-        if tobb:
-            raise AjanlatHiba("Ennek az ajánlatnak már több verziója van - a márka nem váltható.")
-        q.number = kovetkezo_szam(db, adat["brand"])
+    # A szám márkától független, így márkaváltáskor sem változik.
     for k, v in adat.items():
         if k in FEJ_MEZOK:
             setattr(q, k, v)
@@ -423,8 +425,13 @@ def utolso_ar(db: Session, catalog_item_ids: list[int] | None, client_id: int, k
 
 
 def lista(db: Session, *, status: str | None = None, brand: str | None = None, client_id: int | None = None,
-          datum_tol=None, datum_ig=None, q: str | None = None, limit: int = 500) -> list[Quote]:
+          datum_tol=None, datum_ig=None, q: str | None = None, regi: bool | None = None,
+          limit: int = 500) -> list[Quote]:
+    """`regi`: True - csak a Drive-ról importált régi ajánlatok, False - csak
+    az itt készültek, None - mind."""
     s = select(Quote)
+    if regi is not None:
+        s = s.where(Quote.legacy_source.is_not(None) if regi else Quote.legacy_source.is_(None))
     if status:
         s = s.where(Quote.status == status)
     if brand:
@@ -439,6 +446,6 @@ def lista(db: Session, *, status: str | None = None, brand: str | None = None, c
         minta = f"%{q.strip()}%"
         s = s.outerjoin(Client, Client.id == Quote.client_id).where(or_(
             Quote.number.ilike(minta), Quote.project_name.ilike(minta), Quote.location.ilike(minta),
-            Client.nev.ilike(minta),
+            Client.nev.ilike(minta), Quote.legacy_source.ilike(minta),
         ))
     return list(db.scalars(s.order_by(Quote.created_at.desc(), Quote.id.desc()).limit(limit)))
