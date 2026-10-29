@@ -19,9 +19,20 @@ import {
   statusz,
 } from "./quote";
 
+type Forras = "uj" | "regi" | "mind";
+
 /** Árajánlatok listája: szám, ügyfél, projekt, dátum, végösszeg, státusz,
- * márka - szűrőkkel és az „Új árajánlat” gombbal. */
-export function AjanlatLista({ canCreate, canEdit }: { canCreate: boolean; canEdit: boolean }) {
+ * márka - szűrőkkel és az „Új árajánlat” gombbal. `regiek`: a Régi ajánlatok
+ * fül változata - csak a Drive-ról importált régi árajánlatok. */
+export function AjanlatLista({
+  canCreate,
+  canEdit,
+  regiek = false,
+}: {
+  canCreate: boolean;
+  canEdit: boolean;
+  regiek?: boolean;
+}) {
   const [sorok, setSorok] = useState<AjanlatListaElem[] | null>(null);
   const [hiba, setHiba] = useState<string | null>(null);
   const [szoveg, setSzoveg] = useState("");
@@ -29,6 +40,7 @@ export function AjanlatLista({ canCreate, canEdit }: { canCreate: boolean; canEd
   const [marka, setMarka] = useState("");
   const [tol, setTol] = useState("");
   const [ig, setIg] = useState("");
+  const [forras, setForras] = useState<Forras>(regiek ? "regi" : "uj");
   const [uj, setUj] = useState(false);
   const [uresAlap, setUresAlap] = useState(false);
   const [seedBusy, setSeedBusy] = useState(false);
@@ -41,13 +53,14 @@ export function AjanlatLista({ canCreate, canEdit }: { canCreate: boolean; canEd
     if (marka) p.set("brand", marka);
     if (tol) p.set("date_from", tol);
     if (ig) p.set("date_to", ig);
+    if (forras !== "mind") p.set("regi", forras === "regi" ? "true" : "false");
     try {
       setSorok(await hivas<AjanlatListaElem[]>(`?${p.toString()}`));
       setHiba(null);
     } catch (e) {
       setHiba((e as Error).message);
     }
-  }, [szoveg, allapot, marka, tol, ig]);
+  }, [szoveg, allapot, marka, tol, ig, forras]);
 
   useEffect(() => {
     if (idozito.current) clearTimeout(idozito.current);
@@ -74,7 +87,7 @@ export function AjanlatLista({ canCreate, canEdit }: { canCreate: boolean; canEd
 
   return (
     <div className="flex flex-col gap-4">
-      {uresAlap && (
+      {uresAlap && !regiek && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius)] border border-border bg-bg-warning px-4 py-3 text-[13px] text-text-warning">
           <span>
             Az alap tétel-katalógus (98 tétel) és a 10 sablon még nincs betöltve. Betöltés után minden szerkeszthető.
@@ -87,9 +100,9 @@ export function AjanlatLista({ canCreate, canEdit }: { canCreate: boolean; canEd
         </div>
       )}
       <Card
-        title="Árajánlatok"
+        title={regiek ? "Régi árajánlatok (Drive)" : "Árajánlatok"}
         actions={
-          canCreate ? (
+          canCreate && !regiek ? (
             <button type="button" onClick={() => setUj(true)} className="btn btn-primary flex items-center gap-1.5 text-[13px]">
               <Plus size={14} /> Új árajánlat
             </button>
@@ -103,6 +116,13 @@ export function AjanlatLista({ canCreate, canEdit }: { canCreate: boolean; canEd
             value={szoveg}
             onChange={(e) => setSzoveg(e.target.value)}
           />
+          {!regiek && (
+            <select className="field w-auto" value={forras} onChange={(e) => setForras(e.target.value as Forras)} aria-label="Forrás">
+              <option value="uj">Itt készült ajánlatok</option>
+              <option value="regi">Régi ajánlatok (Drive)</option>
+              <option value="mind">Mind</option>
+            </select>
+          )}
           <select className="field w-auto" value={allapot} onChange={(e) => setAllapot(e.target.value)} aria-label="Státusz">
             <option value="">Minden státusz</option>
             {STATUSZOK.map((s) => (
@@ -131,7 +151,11 @@ export function AjanlatLista({ canCreate, canEdit }: { canCreate: boolean; canEd
           <p className="text-[13px] text-text-muted">Betöltés…</p>
         ) : sorok.length === 0 ? (
           <p className="text-[13px] text-text-secondary">Nincs a szűrésnek megfelelő árajánlat.</p>
-        ) : (
+        ) : null}
+        {sorok !== null && sorok.length > 0 && regiek && (
+          <p className="mb-2 text-[12px] text-text-muted">{sorok.length} régi árajánlat</p>
+        )}
+        {sorok !== null && sorok.length > 0 && (
           <div className="overflow-x-auto">
             <table className="w-full text-[13px]">
               <thead>
@@ -160,6 +184,11 @@ export function AjanlatLista({ canCreate, canEdit }: { canCreate: boolean; canEd
                         <Link href={`/arajanlatok/${a.id}`} className="text-text-primary hover:underline">
                           {a.project_name || "(névtelen)"}
                         </Link>
+                        {a.legacy_source && !regiek && (
+                          <span className="ml-2 align-middle">
+                            <StatusBadge label="Régi" tone="neutral" />
+                          </span>
+                        )}
                       </td>
                       <td className="whitespace-nowrap py-2 pr-4 text-text-secondary">
                         {a.event_date_from ? datumSzoveg(a.event_date_from, a.event_date_to) : (a.created_at ?? "").slice(0, 10)}

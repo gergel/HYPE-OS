@@ -315,7 +315,7 @@ export function AjanlatSzerkeszto({
     await kiir();
     try {
       const r = await kuld<Ajanlat>(`/${id}/${ut}`, "POST");
-      toast(ut === "duplicate" ? `Új variáns: ${r.number}` : `Új verzió: v${r.version}`);
+      toast(ut === "duplicate" ? `Új ajánlat: ${r.number}` : `Új verzió: v${r.version}`);
       router.push(`/arajanlatok/${r.id}`);
     } catch (e) {
       setHiba((e as Error).message);
@@ -362,8 +362,8 @@ export function AjanlatSzerkeszto({
       <div className="flex flex-col gap-4">
         {/* Felső sáv */}
         <div className="flex flex-wrap items-center gap-2">
-          <Link href="/arajanlatok" className="btn btn-ghost flex items-center gap-1 text-[13px]">
-            <ArrowLeft size={14} /> Ajánlatok
+          <Link href={aj.legacy_source ? "/arajanlatok/regi" : "/arajanlatok"} className="btn btn-ghost flex items-center gap-1 text-[13px]">
+            <ArrowLeft size={14} /> {aj.legacy_source ? "Régi ajánlatok" : "Ajánlatok"}
           </Link>
           <span className="font-mono text-[15px] font-semibold text-text-primary">{aj.number}</span>
           {aj.version > 1 && <StatusBadge label={`v${aj.version}`} tone="accent" />}
@@ -423,6 +423,34 @@ export function AjanlatSzerkeszto({
             )}
           </div>
         </div>
+
+        {aj.legacy_source && (
+          <div className="-mt-1 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[var(--radius)] border border-border bg-surface-2 px-3 py-2 text-[12.5px] text-text-secondary">
+            <StatusBadge label="Régi árajánlat" tone="neutral" />
+            <span className="min-w-0 flex-1">
+              Importálva a Drive-ról: <span className="text-text-primary">{aj.legacy_source}</span>
+              {aj.legacy_drive_id && (
+                <>
+                  {" · "}
+                  <a
+                    href={`https://drive.google.com/file/d/${aj.legacy_drive_id}/view`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-text-accent hover:underline"
+                  >
+                    eredeti fájl
+                  </a>
+                </>
+              )}
+              . Az átírás ebbe az ajánlatba mentődik; ha új ajánlatként mentenéd, használd a „Mentés újként” gombot.
+            </span>
+            {canCreate && (
+              <button type="button" className="btn btn-primary flex items-center gap-1 text-[12.5px]" onClick={() => uj("duplicate")}>
+                <Copy size={13} /> Mentés újként
+              </button>
+            )}
+          </div>
+        )}
 
         {(aj.versions.length > 1 || aj.parent) && (
           <p className="-mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-text-muted">

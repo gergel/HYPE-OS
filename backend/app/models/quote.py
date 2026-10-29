@@ -164,8 +164,9 @@ class QuoteTemplateItem(Base):
 
 
 class QuoteNumberCounter(Base):
-    """Évente újrainduló sorszám márkánként (HYPE-2026-0001, CB-2026-0001) -
-    soronként zárolva adjuk ki, így párhuzamos létrehozásnál sem ütközik."""
+    """Évente újrainduló sorszám (2026-001, 2026-002…) - soronként zárolva
+    adjuk ki, így párhuzamos létrehozásnál sem ütközik. 2026-10-29 óta a
+    számozás márkától független: a `brand` oszlop értéke ilyenkor „ALL”."""
 
     __tablename__ = "quote_number_counters"
 
@@ -214,6 +215,11 @@ class Quote(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    #: RÉGI ajánlat: a Drive-ról importált Excel (év/fájlnév) - None: itt készült.
+    #: A felület „Régi” jelölést és a Régi ajánlatok fület ez alapján adja.
+    legacy_source: Mapped[str | None] = mapped_column(String(400), unique=True)
+    #: Az eredeti fájl Google Drive-azonosítója (link a szerkesztőben).
+    legacy_drive_id: Mapped[str | None] = mapped_column(String(80))
 
     items: Mapped[list[QuoteItem]] = relationship(
         back_populates="quote", cascade="all, delete-orphan", order_by="QuoteItem.sort_order"

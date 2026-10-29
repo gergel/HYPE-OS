@@ -7,6 +7,7 @@ tranzakcióban, a végén rollback (az API-hívásoknál a commit flush-ra cser�
 from __future__ import annotations
 
 import io
+import re
 from decimal import ROUND_HALF_UP, Decimal
 from types import SimpleNamespace
 
@@ -132,13 +133,32 @@ def test_seed_nem_irja_felul_a_feluleten_atirt_arat(db):
     assert op.base_price == 95000
 
 
-def test_szamozas_markankent_evente_ujraindul(db):
+def test_szamozas_ev_sorszam_markatol_fuggetlen_evente_ujraindul(db):
     from app.quotes.service import kovetkezo_szam
 
     a = kovetkezo_szam(db, "HYPE", 2091)
-    b = kovetkezo_szam(db, "HYPE", 2091)
-    c = kovetkezo_szam(db, "CB", 2091)
-    assert a == "HYPE-2091-0001" and b == "HYPE-2091-0002" and c == "CB-2091-0001"
+    b = kovetkezo_szam(db, "CB", 2091)
+    c = kovetkezo_szam(db, None, 2092)
+    assert (a, b, c) == ("2091-001", "2091-002", "2092-001")
+
+
+def test_regi_ajanlatok_szurese_es_szerkesztese(alap, admin):
+    from app.models.quote import Quote
+    from app.quotes import service as S
+
+    regi = S.letrehoz(alap, admin, {"project_name": "TISZA - KÖTCSE (régi, demó)"})
+    regi.legacy_source = "2025/HYPE_ÁRAJÁNLAT_TISZA - KÖTCSE (demó).xlsx"
+    uj = S.letrehoz(alap, admin, {"project_name": "Új ajánlat (demó)"})
+    alap.flush()
+    regiek = S.lista(alap, regi=True, q="demó")
+    assert regi in regiek and uj not in regiek
+    assert uj in S.lista(alap, regi=False, q="demó") and regi not in S.lista(alap, regi=False, q="demó")
+    # Átírva ugyanaz marad (régi), „mentés újként” (variáns) már új, itt készült ajánlat.
+    S.modosit(alap, regi, {"project_name": "TISZA - KÖTCSE 2026 (demó)", "brand": "CB"})
+    assert regi.legacy_source is not None and regi.brand == "CB"
+    v = S.duplikal(alap, admin, regi)
+    assert v.legacy_source is None and v.number != regi.number and v.parent_quote_id == regi.id
+    assert alap.get(Quote, v.id).project_name == "TISZA - KÖTCSE 2026 (demó)"
 
 
 def test_sablonbol_letrehozas_opcionalis_sorokkal_es_megjegyzessel(alap, admin, ugyfel):
@@ -146,7 +166,7 @@ def test_sablonbol_letrehozas_opcionalis_sorokkal_es_megjegyzessel(alap, admin, 
 
     t = _sablon(alap, "T1")
     q = S.letrehoz(alap, admin, {"template_id": t.id, "client_id": ugyfel.id, "project_name": "Gála (demó)"})
-    assert q.number.startswith("HYPE-") and q.version == 1 and q.status == "draft"
+    assert re.fullmatch(r"20\d\d-\d{3,}", q.number) and q.version == 1 and q.status == "draft"
     assert q.summary_label == "A PROJECT TELJES KÖLTSÉGE" and "írásos megrendelő" in q.note_text
     nevek = [(i.name, i.is_optional) for i in q.items]
     assert ("Operatőr", False) in nevek and ("DJI Mavic drón szett", True) in nevek
@@ -164,7 +184,7 @@ def test_katalogusbol_ar_snapshot_es_frissites(alap, admin):
     from app.quotes import service as S
 
     q = S.letrehoz(alap, admin, {"brand": "CB", "project_name": "Üres (demó)"})
-    assert q.number.startswith("CB-") and q.items == []
+    assert q.brand == "CB" and q.items == []
     c = alap.scalar(select(QuoteCatalogItem).where(QuoteCatalogItem.seed_key == "c010"))
     it = S.katalogusbol(alap, q, c.id, "Emberi erőforrás")
     assert it.unit_price == c.base_price == 85000 and it.occasions == 1 and it.quantity == 1
