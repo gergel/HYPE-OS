@@ -2,7 +2,9 @@
 PDF (ugyanabból az adatból).
 
 Felépítés (mindkettőben):
-    [HYPE vagy ContentBee logó]                       cégadatok, ajánlatszám
+    [HYPE vagy ContentBee logó]                       cégadatok, kelt
+    (az ajánlatszám SZÁNDÉKOSAN nincs rajta - a felhasználó kérése, 2026-10-29;
+    a szám csak a rendszeren belüli azonosító)
     PROJECT NEVE: <projekt neve>
     Tétel/Szolgáltatás | Alkalom | Mennyiség | Egységár | Teljes ár
     <szekció fejléc>
@@ -48,7 +50,7 @@ def _ugyfel(db: Session, q: Quote) -> str | None:
 def fajlnev(db: Session, q: Quote, kiterjesztes: str) -> str:
     """HYPE_ÁRAJÁNLAT_<ÜGYFÉL> - <PROJEKT NEVE>.xlsx (nagybetűvel, mint eddig)."""
     reszek = [x for x in (_ugyfel(db, q), q.project_name) if x and x.strip()]
-    torzs = " - ".join(reszek) or q.number
+    torzs = " - ".join(reszek) or "NÉVTELEN"
     if q.version > 1:
         torzs += f" V{q.version}"
     torzs = re.sub(r'[\\/:*?"<>|\r\n]+', " ", torzs).strip().upper()
@@ -117,7 +119,7 @@ def xlsx(db: Session, q: Quote) -> bytes:
              "szekcio": Font(bold=True), "osszeg": Font(bold=True, size=12), "kicsi": Font(size=9, color="555555"),
              "dolt": Font(italic=True, size=9, color="555555")}
 
-    # Logó + cégadatok, ajánlatszám.
+    # Logó + cégadatok, kelt (ajánlatszám nélkül).
     logo = LOGO.get(q.brand)
     if logo and logo.exists():
         img = XlImage(str(logo))
@@ -126,8 +128,7 @@ def xlsx(db: Session, q: Quote) -> bytes:
         arany = min(70 / img.height, 180 / img.width)
         img.height, img.width = int(img.height * arany), int(img.width * arany)
         ws.add_image(img, "A1")
-    for i, sor in enumerate(_ceg() + [f"Ajánlatszám: {q.number}" + (f" (v{q.version})" if q.version > 1 else ""),
-                                      f"Kelt: {date.today().strftime('%Y.%m.%d.')}"]):
+    for i, sor in enumerate(_ceg() + [f"Kelt: {date.today().strftime('%Y.%m.%d.')}"]):
         c = ws.cell(row=1 + i, column=4, value=sor)
         c.font = fonts["kicsi"]
     ws.row_dimensions[1].height = 15
@@ -322,9 +323,7 @@ def pdf(db: Session, q: Quote) -> bytes:
         bal = Image(str(logo), height=logo_szel / arany, width=logo_szel)
     else:
         bal = Spacer(1, 1)
-    ceg = "<br/>".join(_esc(x) for x in _ceg() + [
-        f"Ajánlatszám: {q.number}" + (f" (v{q.version})" if q.version > 1 else ""),
-        f"Kelt: {date.today().strftime('%Y.%m.%d.')}"])
+    ceg = "<br/>".join(_esc(x) for x in _ceg() + [f"Kelt: {date.today().strftime('%Y.%m.%d.')}"])
     fejlec = Table([[bal, Paragraph(ceg, jobb)]], colWidths=[szel * 0.5, szel * 0.5])
     fejlec.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 0),
                                 ("RIGHTPADDING", (0, 0), (-1, -1), 0)]))
