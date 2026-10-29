@@ -116,3 +116,19 @@ def test_fizetes_gomb_csak_autos_kiadasra(db, kliens):
     db.flush()
     r = c.patch(f"/api/v1/autok/kiadasok/{mas.id}", json={"kesz": True})
     assert r.status_code == 404
+
+
+def test_kiadasokba_rendszam_utan_a_megjegyzes_mire_ment_a_megjegyzesbe(db, kliens):
+    """A felhasználó kérése (2026-10-29): a Kiadásokban "RENDSZÁM – megjegyzés"
+    (jellemzően a partner), a "Mire ment" a megjegyzésbe kerül."""
+    c, auto = kliens
+    r = c.post(f"/api/v1/autok/{auto.id}/kiadasok",
+               json={"megnevezes": "Tankolás", "megjegyzes": "MOL Budaörs", "osszeg": 10000, "fizetesi_mod": "Bankkártya"})
+    assert r.status_code == 201, r.text
+    e = db.get(Expense, r.json()["id"])
+    assert e.megnevezes == "DEMO-001 – MOL Budaörs" and e.megjegyzes == "Tankolás"
+
+    r = c.post(f"/api/v1/autok/{auto.id}/kiadasok",
+               json={"megnevezes": "Parkolás", "osszeg": 500, "fizetesi_mod": "Bankkártya"})
+    e = db.get(Expense, r.json()["id"])
+    assert e.megnevezes == "DEMO-001" and e.megjegyzes == "Parkolás"

@@ -102,8 +102,9 @@ function KoltsegUrlap({ autoId, onKesz }: { autoId: number; onKesz: () => void }
       const a = (await res.json()) as Record<string, string | number | null>;
       const szoveg = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
       let beirt = 0;
-      // "Mire ment" = a számla fő tétele; a partner neve a megjegyzésbe kerül,
-      // hogy a költés-sor rövid maradjon, de látszódjon, ki állította ki.
+      // "Mire ment" = a számla fő tétele; a partner neve a megjegyzésbe kerül -
+      // a Kiadásokban ez áll a rendszám után, a "Mire ment" pedig a
+      // megjegyzésben (lásd backend routes/autok.create_auto_kiadas).
       const mire = szoveg(a.kiadas_leiras) ?? szoveg(a.megnevezes);
       if (mire) {
         setMegnevezes(mire);
