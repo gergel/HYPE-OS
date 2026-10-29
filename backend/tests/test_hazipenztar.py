@@ -275,3 +275,31 @@ def test_kp_naplo_vegpont_fedezet_osszesito(db, monkeypatch):
     assert d["osszes"]["fedezet"] >= 1_270 and d["osszes"]["fedezet_db"] >= 1
     sor = next(s for s in d["sorok"] if s["megnevezes"] == "Fedezet API (demó)")
     assert sor["tipus"] == "fedezet" and sor["ki"] == 0 and sor["fedezet"] == 1_270
+
+
+def test_kp_szamla_nelkul_fedezetkent_kerul_a_hazipenztarba(db):
+    """„Készpénzben fizették, számla nélkül” a projektkódon: a bevétel-sor a
+    házipénztárba FEDEZET-BEVÉTELKÉNT kerül, és az egyenleget növeli."""
+    from app.models.project_code import ProjectCode
+    from app.services import kassza, megrendeloi_szamla
+
+    elotte = kassza.kep(db).osszes
+    pk = ProjectCode(projektkod="KPSZN-TESZT (demó)", netto_osszeg=80_000)
+    db.add(pk)
+    db.flush()
+
+    with pytest.raises(megrendeloi_szamla.SzamlaHiba):
+        megrendeloi_szamla.jelold_kp_szamla_nelkul(db, pk, kifizetes_datuma=None)
+
+    allas = megrendeloi_szamla.jelold_kp_szamla_nelkul(db, pk, kifizetes_datuma=date(2026, 7, 1))
+    assert allas.kifizetve and allas.keszpenzes and allas.szamla_kihagyva
+    assert allas.kp_szamla_nelkul
+
+    kep = kassza.kep(db)
+    o = kep.osszes
+    sor = next(s for s in kep.sorok if s.forras == "bevetel" and s.projektkod == pk.projektkod)
+    assert sor.tipus == kassza.FEDEZET_BEVETEL
+    assert o.fedezet_bevetel - elotte.fedezet_bevetel == pytest.approx(sor.be)
+    assert o.bevetel - elotte.bevetel == pytest.approx(0)
+    assert o.egyenleg - elotte.egyenleg == pytest.approx(sor.be)
+    assert sor.be > 0

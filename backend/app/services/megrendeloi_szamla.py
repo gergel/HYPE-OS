@@ -27,12 +27,17 @@ nem tippeljük:
   services/kassza.py). Ezért NEM készül hozzá külön KpForgalom sor: az
   kétszer számolná ugyanazt a pénzt.
 
-A készpénzes bevétel két félét jelenthet, és a különbséget a SZÁMLA dönti el
-(lásd services/bizonylat.py):
+A készpénzes bevétel két félét jelenthet, és a különbséget a projektkód
+„nincs számla” jelölése dönti el (lásd services/kassza.szamla_nelkuli_bevetel):
 
 - van mögötte számla -> sima LEGÁLIS bevétel;
 - nincs mögötte számla -> FEDEZET: ez az a készpénz, amiből a számla nélküli
-  kiadás fedezhető, tehát a fekete egyenleget csökkenti.
+  kiadás fedezhető. A házipénztárban FEDEZET-BEVÉTELKÉNT jelenik meg, és az
+  egyenleget növeli (a pénz a dobozban van).
+
+Erre egy lépésben is van út: „Készpénzben fizették, számla nélkül” (lásd
+jelold_kp_szamla_nelkul) - ez egyszerre jelöli, hogy nincs számla, és hogy
+készpénzben kifizették.
 """
 
 from __future__ import annotations
@@ -54,6 +59,10 @@ from app.services import projektkod_osszeg
 #: Az így keletkezett bevétel-sor megjegyzése - ebből látszik, hogy nem kézzel
 #: vezették fel, hanem a számla-lépés zárásakor jött létre.
 BEVETEL_MEGJEGYZES = "A megrendelői számla kifizetésekor keletkezett."
+
+#: A „Készpénzben fizették, számla nélkül” jelölés alapértelmezett indoka -
+#: a „nincs számla” jelöléshez indok kell (lásd allitsd_a_szamla_kihagyast).
+KP_SZAMLA_NELKUL_OKA = "Készpénzben fizették, számla nélkül."
 
 
 class SzamlaHiba(ValueError):
@@ -113,6 +122,9 @@ class SzamlaAllas:
     #: határidőhöz mérve (lásd models/project_code.hatarido_allas). Egy dátum
     #: önmagában néma: hogy sürgős-e, csak a mai naphoz képest derül ki.
     hatarido_allas: dict | None = None
+    #: Készpénzben, számla nélkül fizetve - a házipénztárban FEDEZET-ként áll
+    #: (lásd services/kassza.py).
+    kp_szamla_nelkul: bool = False
 
 
 def _szamla_fajl_url(db: Session, pk: ProjectCode) -> str | None:
@@ -224,6 +236,11 @@ def allas(db: Session, pk: ProjectCode) -> SzamlaAllas:
         kifizetes_datum_kell=_kifizetes_datum_kell(pk),
         tranzakcio_nelkul_lezarva=pk.tranzakcio_nelkul_lezarva,
         hatarido_allas=pk.hatarido_allas,
+        kp_szamla_nelkul=(
+            pk.bevetel_kifizetve
+            and fizetesi_mod_szolg.keszpenzes(mod)
+            and bool(pk.szamla_kihagyva or pk.papir_nelkul)
+        ),
     )
 
 
@@ -331,6 +348,22 @@ def allitsd_a_szamla_kihagyast(
         megrendeloi_papir.kihagyd_a_papirokat_automatikusan(db, pk, "Számla nélkül fizetve")
     db.flush()
     return allas(db, pk)
+
+
+def jelold_kp_szamla_nelkul(
+    db: Session, pk: ProjectCode, *, kifizetes_datuma: date | None, megjegyzes: str | None = None
+) -> SzamlaAllas:
+    """„Készpénzben fizették, számla nélkül” - egy lépésben (a felhasználó
+    kérése): a projektkódon „nincs számla” lesz, és kifizetve, KÉSZPÉNZZEL. A
+    bevétel-sor így a házipénztárba FEDEZET-BEVÉTELKÉNT kerül (lásd
+    services/kassza.py) - a pénz a dobozban van, de nem legális bevétel.
+
+    A dátum itt KÖTELEZŐ: készpénz kézbe adása valódi tranzakció, és a
+    házipénztár futó egyenlege a napjából számol."""
+    if kifizetes_datuma is None:
+        raise SzamlaHiba("Add meg, mikor fizették ki készpénzben - ebből lesz a házipénztár-sor napja.")
+    allitsd_a_szamla_kihagyast(db, pk, kihagyva=True, oka=(megjegyzes or "").strip() or KP_SZAMLA_NELKUL_OKA)
+    return jelold_kifizetettnek(db, pk, kifizetes_datuma=kifizetes_datuma, fizetes_modja=fizetesi_mod_szolg.KESZPENZ)
 
 
 def _vezesd_fel_a_bevetelt(

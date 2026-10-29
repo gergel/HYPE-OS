@@ -43,6 +43,7 @@ export function MegrendeloiSzamla({
   const [hiba, setHiba] = useState<string | null>(null);
   const [dialogNyitva, setDialogNyitva] = useState(false);
   const [kihagyasNyitva, setKihagyasNyitva] = useState(false);
+  const [kpNyitva, setKpNyitva] = useState(false);
 
   async function hivas(ut: string, torzs?: unknown) {
     setBusy(true);
@@ -117,6 +118,19 @@ export function MegrendeloiSzamla({
           Nincs számla erről a munkáról
         </button>
       )}
+      {/* KÉSZPÉNZBEN, SZÁMLA NÉLKÜL - egy lépésben: nincs számla + kifizetve
+          készpénzzel. A Házipénztárba FEDEZETKÉNT kerül (lásd backend
+          services/kassza.py): a pénz a dobozban van, de nem legális bevétel. */}
+      {!allas.kifizetve && canEdit && (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => setKpNyitva(true)}
+          className="block text-[12.5px] text-text-muted hover:text-text-primary disabled:opacity-50"
+        >
+          Készpénzben fizették, számla nélkül
+        </button>
+      )}
       {allas.szamla_kihagyva && (
         <div className="rounded-[var(--radius)] border border-border bg-surface-3 p-2.5">
           <p className="text-[12.5px] text-text-secondary">
@@ -185,9 +199,9 @@ export function MegrendeloiSzamla({
               {allas.fizetes_modja}
               {allas.keszpenzes && (
                 <span className="text-text-muted">
-                  {" "}
-                  · a <a href="/penzugyek/kp-forgalom" className="text-text-accent hover:underline">Házipénztárban</a> is
-                  szerepel bevételként
+                  {allas.kp_szamla_nelkul && ", számla nélkül"} · a{" "}
+                  <a href="/penzugyek/kp-forgalom" className="text-text-accent hover:underline">Házipénztárban</a> is
+                  szerepel {allas.kp_szamla_nelkul ? "fedezetként" : "bevételként"}
                 </span>
               )}
             </p>
@@ -235,6 +249,17 @@ export function MegrendeloiSzamla({
         />
       )}
 
+      {kpNyitva && (
+        <KpSzamlaNelkulDialog
+          osszeg={allas.brutto_forintban ?? allas.netto_forintban}
+          onMegse={() => setKpNyitva(false)}
+          onJelol={async (adat) => {
+            const sikeres = await hivas("kp-szamla-nelkul", adat);
+            if (sikeres) setKpNyitva(false);
+          }}
+        />
+      )}
+
       {dialogNyitva && (
         <KifizetesDialog
           hatarido={allas.fizetesi_hatarido}
@@ -246,7 +271,7 @@ export function MegrendeloiSzamla({
           }
           // Készpénznél ettől függ, hogy legális bevétel lesz-e belőle a
           // kasszában, vagy fedezet - a felhasználó előre lássa, melyik.
-          vanSzamla={allas.van_szamla_fajl && !allas.szamla_kihagyva}
+          vanSzamla={!allas.szamla_kihagyva}
           onMegse={() => setDialogNyitva(false)}
           onJelol={async (adat) => {
             const sikeres = await hivas("kifizetve", adat);
@@ -406,7 +431,7 @@ function KifizetesDialog({
                     A bevételek közé is bekerül, <b>és a házipénztárba is</b> – a Házipénztárban ugyanez a sor jelenik meg.{" "}
                     {vanSzamla
                       ? "Van mögötte számla, tehát legális bevétel."
-                      : "Nincs mögötte számla, tehát fedezet: a számla nélküli kiadásokat csökkenti."}
+                      : "Nincs mögötte számla, tehát a Házipénztárban fedezetként jelenik meg."}
                   </>
                 ) : (
                   "A bankszámlára érkezett – a bevételek közé kerül, a kasszát nem mozgatja."
@@ -542,6 +567,94 @@ function NincsSzamlaDialog({ onMegse, onJelol }: { onMegse: () => void; onJelol:
             className="rounded-[var(--radius)] border border-border bg-bg-accent px-3 py-1.5 text-[13px] text-text-accent hover:opacity-90 disabled:opacity-50"
           >
             Mentés
+          </button>
+        </div>
+      </div>
+    </ModalReteg>
+  );
+}
+
+/** „Készpénzben fizették, számla nélkül” - a kifizetés napjával.
+ *
+ * Egy lépésben jelöli, hogy erről a munkáról nincs számla, és hogy készpénzben
+ * kifizették: a bevétel-sor a Házipénztárba FEDEZETKÉNT kerül (lásd backend
+ * services/megrendeloi_szamla.jelold_kp_szamla_nelkul). A dátum kötelező: a
+ * készpénz átadása valódi tranzakció, és a házipénztár egyenlege a napjából
+ * számol. */
+function KpSzamlaNelkulDialog({
+  osszeg,
+  onMegse,
+  onJelol,
+}: {
+  osszeg: number | null;
+  onMegse: () => void;
+  onJelol: (adat: { kifizetes_datuma: string; megjegyzes: string | null }) => void;
+}) {
+  // Üresen indul, nem a mai nappal - ugyanaz az ok, mint a KifizetesDialog-nál.
+  const [datum, setDatum] = useState("");
+  const [megjegyzes, setMegjegyzes] = useState("");
+
+  return (
+    <ModalReteg onClose={onMegse}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="w-full max-w-md rounded-[var(--radius-lg)] border border-border bg-surface-1 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="border-b border-border px-5 py-3">
+          <h3 className="text-[14px] font-medium text-text-primary">Készpénzben fizették, számla nélkül</h3>
+          {osszeg !== null && <p className="mt-0.5 text-[12.5px] text-text-secondary">{formatHuf(osszeg)}</p>}
+        </div>
+        <div className="space-y-3 p-5">
+          <p className="text-[12.5px] text-text-secondary">
+            Erről a munkáról nem lesz számla. A projektkód kifizetett lesz, és az összeg a{" "}
+            <b>Házipénztárba fedezetként</b> kerül: a pénz a dobozban van, de nem legális bevétel.
+          </p>
+          <label className="block text-[13px] text-text-primary">
+            Mikor fizették ki? *
+            <span className="mt-1 flex items-center gap-2">
+              <input
+                type="date"
+                value={datum}
+                onChange={(e) => setDatum(e.target.value)}
+                className="w-full rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1.5 text-[13px] text-text-primary"
+              />
+              <button
+                type="button"
+                onClick={() => setDatum(maiNap())}
+                className="shrink-0 rounded-[var(--radius)] border border-border px-2 py-1.5 text-[12.5px] text-text-secondary hover:bg-surface-3"
+              >
+                Ma
+              </button>
+            </span>
+          </label>
+          <label className="block text-[13px] text-text-primary">
+            Megjegyzés
+            <textarea
+              rows={2}
+              value={megjegyzes}
+              onChange={(e) => setMegjegyzes(e.target.value)}
+              placeholder="Pl. kinek adták át, mire…"
+              className="mt-1 w-full rounded-[var(--radius)] border border-border bg-surface-2 px-2 py-1.5 text-[13px] leading-relaxed text-text-primary"
+            />
+          </label>
+        </div>
+        <div className="flex justify-end gap-3 border-t border-border px-5 py-3">
+          <button
+            type="button"
+            onClick={onMegse}
+            className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3"
+          >
+            Mégse
+          </button>
+          <button
+            type="button"
+            disabled={!datum}
+            onClick={() => onJelol({ kifizetes_datuma: datum, megjegyzes: megjegyzes.trim() || null })}
+            className="rounded-[var(--radius)] border border-border bg-bg-accent px-3 py-1.5 text-[13px] text-text-accent hover:opacity-90 disabled:opacity-50"
+          >
+            Kifizetve készpénzben
           </button>
         </div>
       </div>

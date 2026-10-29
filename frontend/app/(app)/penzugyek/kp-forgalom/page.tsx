@@ -24,6 +24,7 @@ const PAGE = "/penzugyek";
 
 const TIPUS: Record<HazipenztarTipus, { cimke: string; tone: "teal" | "blue" | "orange" | "danger" | "neutral" }> = {
   bevetel: { cimke: "Bevétel", tone: "teal" },
+  fedezet_bevetel: { cimke: "Fedezet (KP, számla nélkül)", tone: "teal" },
   atvezetes: { cimke: "Átvezetés (ATM)", tone: "blue" },
   kiadas: { cimke: "Kiadás", tone: "orange" },
   fekete_kiadas: { cimke: "Fekete kiadás", tone: "danger" },
@@ -41,6 +42,10 @@ const TIPUS: Record<HazipenztarTipus, { cimke: string; tone: "teal" | "blue" | "
  * - KIADÁS: készpénzes kiadás, amihez van vagy lesz számla;
  * - FEKETE KIADÁS: készpénzes kiadás, amire rányomták, hogy sosem lesz
  *   számlája.
+ *
+ * - FEDEZET-BEVÉTEL: számla nélkül, készpénzben kifizetett projektkód (a
+ *   projektkód számla-lépésénél „Készpénzben fizették, számla nélkül”) - a
+ *   pénz a dobozban van, az egyenleget növeli.
  *
  * És egy ötödik, ami csak LÁTSZIK: a FEDEZET - kiadásként felvezetett tétel,
  * ami mögött van számla, de a pénz valójában nem jött ki a dobozból. A
@@ -69,6 +74,8 @@ export default async function HazipenztarPage() {
     fekete_kiadas_db: 0,
     fedezet: 0,
     fedezet_db: 0,
+    fedezet_bevetel: 0,
+    fedezet_bevetel_db: 0,
     be: 0,
     ki: 0,
     egyenleg: 0,
@@ -181,7 +188,7 @@ export default async function HazipenztarPage() {
     <div className="flex flex-1 flex-col">
       <TopBar />
       <div className="flex-1 space-y-6 p-4 md:p-8">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-7">
           <StatCard
             label="Házipénztár egyenlege"
             value={formatHuf(osszes.egyenleg)}
@@ -195,6 +202,13 @@ export default async function HazipenztarPage() {
             icon={ArrowDownLeft}
             tone="teal"
             megjegyzes={`${osszes.bevetel_db} tétel`}
+          />
+          <StatCard
+            label="Fedezet – KP projektkód, számla nélkül"
+            value={formatHuf(osszes.fedezet_bevetel)}
+            icon={ShieldCheck}
+            tone="teal"
+            megjegyzes={`${osszes.fedezet_bevetel_db} tétel · az egyenleget növeli`}
           />
           <StatCard
             label="Átvezetés – ATM-felvétel"
@@ -228,8 +242,11 @@ export default async function HazipenztarPage() {
 
         <Card title={`Házipénztár (${megjelenitett.length} mozgás)`}>
           <p className="mb-3 text-[12.5px] text-text-muted">
-            Egyenleg = bevétel + átvezetés − kiadás − fekete kiadás, bruttóban, 2026.01.01 óta. <b>Bevétel</b> csak a
-            projektkód készpénzes kifizetéséből kerülhet ide (projektkód → Számla → Kifizetve, fizetési mód: Készpénz).{" "}
+            Egyenleg = bevétel + fedezet-bevétel + átvezetés − kiadás − fekete kiadás, bruttóban, 2026.01.01 óta.{" "}
+            <b>Bevétel</b> csak a projektkód készpénzes kifizetéséből kerülhet ide (projektkód → Számla → Kifizetve,
+            fizetési mód: Készpénz). Ha a projektkódot <b>készpénzben, számla nélkül</b> fizették (projektkód → Számla →
+            „Készpénzben fizették, számla nélkül”), a sor <b>fedezetként</b> érkezik: a pénz itt van, de nem legális
+            bevétel.{" "}
             <b>Átvezetés</b> az ATM-ből felvett készpénz: a házipénztár nő, a bankszámla egyenlege csökken, kiadás nem
             keletkezik. A <b>kiadás</b> fekete, ha rányomjátok, hogy sosem lesz számlája. A <b>fedezet</b> olyan kiadás,
             ami mögött van számla, de a pénz valójában nem jött ki a dobozból: a könyvekben kiadás, a házipénztár
