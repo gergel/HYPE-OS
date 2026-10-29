@@ -297,6 +297,8 @@ def test_xlsx_export_kepletekkel_opcios_blokkal_es_fajlnev(alap, admin, ugyfel):
     cellak = {(c.row, c.column): c.value for row in ws.iter_rows() for c in row if c.value is not None}
     ertekek = list(cellak.values())
     assert "PROJECT NEVE: Gála est (demó)" in ertekek
+    # Az ajánlatszám nem kerül az ajánlatra (csak belső azonosító).
+    assert not any(q.number in str(v) or "Ajánlatszám" in str(v) for v in ertekek)
     fej = next(r for (r, c), v in cellak.items() if v == "Tétel/Szolgáltatás")
     assert [cellak.get((fej, c)) for c in range(1, 6)] == ["Tétel/Szolgáltatás", "Alkalom", "Mennyiség", "Egységár", "Teljes ár"]
     kepletek = [v for v in ertekek if isinstance(v, str) and v.startswith("=")]
@@ -363,6 +365,7 @@ def test_pdf_export_ervenyes_pdf(alap, admin):
     szoveg = "".join(p.extract_text() for p in PdfReader(io.BytesIO(tartalom)).pages)
     assert "Közvetítés (demó)" in szoveg and "STREAMING SZOLGÁLTATÁS KÖLTSÉGE" in szoveg
     assert "Hype Productions Kft." in szoveg
+    assert q.number not in szoveg and "Ajánlatszám" not in szoveg
 
 
 # ── API ──────────────────────────────────────────────────────────────────────
