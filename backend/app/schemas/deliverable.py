@@ -67,6 +67,9 @@ class DeliverableListItem(BaseModel):
     #: hozza be, hogy ne legyen soronkénti lekérdezés.
     kiosztott_employee_ids: list[int] = []
     kiosztott_nevek: list[str] = []
+    #: Ki vezette fel - a kártyákon MINDIG látszik (a felhasználó kérése).
+    aki_felvezette_employee_id: int | None = None
+    felvezeto_neve: str | None = None
     vinyok: JsonScalar = None
     anyag_kikuldve: bool = False
     vagas_leallitva: datetime | None = None
@@ -96,6 +99,7 @@ class DeliverableRead(DeliverableBase):
     #: Kikre van kiosztva (több ember is lehet) - lásd DeliverableListItem.
     kiosztott_employee_ids: list[int] = []
     kiosztott_nevek: list[str] = []
+    felvezeto_neve: str | None = None
     # Ha van hozzá tartozó Média Portál (lásd routes/portal_admin.py
     # create_portal_from_deliverable), a frontend ez alapján dönti el, hogy
     # "Portál létrehozása" gombot vagy a meglévő Portálra mutató linket mutassa.

@@ -93,3 +93,12 @@ def test_felvezetes_rogziti_ki_vezette_fel(k):
     assert r.status_code == 201, r.text
     assert r.json()["aki_felvezette_employee_id"] == admin.id
     assert db.get(Deliverable, r.json()["id"]).aki_felvezette_employee_id == admin.id
+
+
+def test_a_lista_kartyain_latszik_a_felvezeto(k):
+    c, admin = k["c"], k["admin"]
+    r = c.post(D, json={"esemeny_neve": "Felvezető kártya demó", "projektkod_szoveg": "HYPE26-9934"})
+    assert r.status_code == 201, r.text
+    sor = next(s for s in c.get(D, params={"limit": 5000}).json() if s["id"] == r.json()["id"])
+    assert sor["aki_felvezette_employee_id"] == admin.id
+    assert sor["felvezeto_neve"] == admin.full_name

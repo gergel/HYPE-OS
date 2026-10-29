@@ -27,6 +27,9 @@ export type BoardCard = {
    * (data-URL) - a név mellett kis avatárként jelenik meg (a felhasználó
    * kérése); kép híján csak a név látszik. */
   kiosztva?: { nev: string; szin?: string | null; kep?: string | null }[];
+  /** Ki vezette fel (hozta létre) az anyagot - a felhasználó kérése, hogy
+   * MINDIG látsszon a kártyán, mint a kiosztás. Ugyanúgy a saját színén. */
+  felvezette?: { nev: string; szin?: string | null } | null;
   /** Akiknek épp FUT az időmérője ezen az anyagon - élő jelzés a kártyán. */
   timerek?: string[];
 };
@@ -145,6 +148,17 @@ function BoardCardView({
               </span>
             </span>
           ))}
+        </p>
+      )}
+      {card.felvezette && (
+        <p className="mt-0.5 text-[12px] text-text-muted [overflow-wrap:anywhere]">
+          Felvezette:{" "}
+          <span
+            style={card.felvezette.szin ? { color: card.felvezette.szin } : undefined}
+            className={card.felvezette.szin ? "font-medium" : "text-text-secondary"}
+          >
+            {card.felvezette.nev}
+          </span>
         </p>
       )}
       {card.timerek && card.timerek.length > 0 && (

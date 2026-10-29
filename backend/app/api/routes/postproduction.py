@@ -439,7 +439,7 @@ deliverables_router = build_crud_router(
     sor_szuro=_csak_a_sajat_anyagai,
     # A lista sémája a kiosztottakat is adja (kártyákon "Kiosztva: A, B") -
     # eager load nélkül ez soronként külön lekérdezés lenne.
-    list_options=(selectinload(Deliverable.kiosztottak),),
+    list_options=(selectinload(Deliverable.kiosztottak), selectinload(Deliverable.felvezeto)),
 )
 
 timesheets_router = build_crud_router(

@@ -305,6 +305,10 @@ export function UtomunkaContent({
           ? [employeeName.get(d.assigned_to_employee_id) ?? "?"]
           : [];
     const kiosztva = kiosztottNevek.map((nev) => ({ nev, szin: nevSzin.get(nev) ?? null, kep: nevKep.get(nev) ?? null }));
+    // Ki vezette fel (a felhasználó kérése: minden kártyán látsszon).
+    const felvezetoNev =
+      d.felvezeto_neve ?? (d.aki_felvezette_employee_id ? employeeName.get(d.aki_felvezette_employee_id) : undefined);
+    const felvezette = felvezetoNev ? { nev: felvezetoNev, szin: nevSzin.get(felvezetoNev) ?? null } : null;
     return {
       id: d.id,
       href: `/utomunka/${d.id}`,
@@ -315,6 +319,7 @@ export function UtomunkaContent({
       // A felhasználó kérése: a kártyán MINDIG látsszon, kinek van kiosztva
       // és kinek fut rajta épp az időmérője.
       kiosztva,
+      felvezette,
       timerek: timerNevek.get(d.id) ?? [],
       // Piros prioritás-körvonal, amíg az anyag le nem zárul (a felhasználó
       // kérése) - lásd prioritasKiemeles fent.

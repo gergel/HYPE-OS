@@ -157,6 +157,12 @@ class Deliverable(TimestampMixin, Base):
         return [e.full_name for e in self.kiosztottak]
 
     @property
+    def felvezeto_neve(self) -> str | None:
+        """Ki vezette fel az anyagot - a tábla kártyáin "Felvezette: X" (a
+        felhasználó kérése), névfeloldás nélkül, mint a kiosztott_nevek."""
+        return self.felvezeto.full_name if self.felvezeto is not None else None
+
+    @property
     def portal_id(self) -> int | None:
         """A DeliverableRead séma erre hivatkozik, hogy a frontend eldönthesse:
         van-e már Média Portál ehhez a vágandó anyaghoz (lásd

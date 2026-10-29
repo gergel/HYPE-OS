@@ -424,6 +424,9 @@ export type Deliverable = {
    * az első kiosztott tükre). */
   kiosztott_employee_ids: number[];
   kiosztott_nevek: string[];
+  /** Ki vezette fel az anyagot - a kártyákon mindig látszik. */
+  aki_felvezette_employee_id?: number | null;
+  felvezeto_neve?: string | null;
   project_id: number | null;
   vinyok: string[] | null;
   /** A vinyó-nézet keresőjéhez - a lista-séma is hozza őket. */
