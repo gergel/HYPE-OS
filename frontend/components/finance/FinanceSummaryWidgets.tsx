@@ -83,12 +83,10 @@ export function KasszaWidget({ kassza }: { kassza: FinanceSummary["kassza"] }) {
         <div className="rounded-[var(--radius)] border border-border bg-surface-3 p-3">
           <p className="text-[12px] text-text-secondary">Idei bevétel és átvezetés</p>
           <p className="mt-1 text-[22px] font-semibold tracking-[-0.02em] text-text-primary tabular-nums">
-            {formatHuf(kassza.idei_bevetel + kassza.idei_fedezet_bevetel + kassza.idei_atvezetes)}
+            {formatHuf(kassza.idei_bevetel + kassza.idei_atvezetes)}
           </p>
           <p className="mt-1 text-[11.5px] text-text-muted">
-            KP projektkód-kifizetés {formatHuf(kassza.idei_bevetel)}
-            {kassza.idei_fedezet_bevetel_db > 0 && <> · fedezet (számla nélkül) {formatHuf(kassza.idei_fedezet_bevetel)}</>}
-            {" "}· ATM {formatHuf(kassza.idei_atvezetes)}
+            KP projektkód-kifizetés {formatHuf(kassza.idei_bevetel)} · ATM {formatHuf(kassza.idei_atvezetes)}
           </p>
         </div>
         <div
