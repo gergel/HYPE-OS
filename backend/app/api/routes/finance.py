@@ -604,6 +604,9 @@ class Kassza(BaseModel):
     #: Az idei mozgás a négy fajta szerint (lásd services/kassza.py).
     idei_bevetel: float = 0
     idei_bevetel_db: int = 0
+    #: Számla nélkül, készpénzben fizetett projektkódok (FEDEZET-BEVÉTEL).
+    idei_fedezet_bevetel: float = 0
+    idei_fedezet_bevetel_db: int = 0
     #: Az idei ATM-felvétel (bankszámla -> házipénztár átvezetés), nettó hatás.
     idei_atvezetes: float = 0
     idei_atvezetes_db: int = 0
@@ -703,6 +706,8 @@ def _kassza(db: Session, today: date, months: list[tuple[int, int]]) -> Kassza:
         idei_ki=kep.idei.ki,
         idei_bevetel=kep.idei.bevetel,
         idei_bevetel_db=kep.idei.bevetel_db,
+        idei_fedezet_bevetel=kep.idei.fedezet_bevetel,
+        idei_fedezet_bevetel_db=kep.idei.fedezet_bevetel_db,
         idei_atvezetes=kep.idei.atvezetes,
         idei_atvezetes_db=kep.idei.atvezetes_db,
         idei_sima_kiadas=kep.idei.sima_kiadas,
@@ -735,7 +740,7 @@ class KpNaploSor(BaseModel):
     id: int
     #: bevetel (Revenue) | kiadas (Expense) | kp_forgalom (átvezetés)
     forras: str
-    #: bevetel | atvezetes | kiadas | fekete_kiadas | fedezet (lásd services/kassza.py)
+    #: bevetel | fedezet_bevetel | atvezetes | kiadas | fekete_kiadas | fedezet (lásd services/kassza.py)
     tipus: str
     datum: date | None
     megnevezes: str
@@ -776,6 +781,10 @@ class KpOsszesites(BaseModel):
     #: FEDEZET: számlás kiadás, amiért a pénz nem jött ki - nincs az egyenlegben.
     fedezet: float = 0
     fedezet_db: int = 0
+    #: FEDEZET-BEVÉTEL: számla nélkül, készpénzben fizetett projektkód - az
+    #: egyenlegben benne van.
+    fedezet_bevetel: float = 0
+    fedezet_bevetel_db: int = 0
     be: float = 0
     ki: float = 0
     egyenleg: float = 0
@@ -801,6 +810,8 @@ def _osszesites(o) -> KpOsszesites:
         fekete_kiadas_db=o.fekete_kiadas_db,
         fedezet=o.fedezet,
         fedezet_db=o.fedezet_db,
+        fedezet_bevetel=o.fedezet_bevetel,
+        fedezet_bevetel_db=o.fedezet_bevetel_db,
         be=o.be,
         ki=o.ki,
         egyenleg=o.egyenleg,

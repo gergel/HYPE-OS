@@ -26,8 +26,15 @@ látszik, de NEM mozgat:
    (`Expense.kp_fedezet`). A könyvekben kiadás; a házipénztárban csak
    látszik (külön összesítve), az egyenleget nem változtatja.
 
-    egyenleg = bevétel + átvezetés - sima kiadás - fekete kiadás
-    (a fedezet nincs benne)
+6. **FEDEZET-BEVÉTEL** (2026-10-29) - készpénzben kifizetett projektkód, amiről
+   NINCS számla (a projektkód számla-lépésénél „Készpénzben fizették, számla
+   nélkül”, azaz `ProjectCode.szamla_kihagyva` + Készpénz). A pénz a dobozban
+   van, tehát az egyenleget NÖVELI - de nem legális bevétel, hanem FEDEZET:
+   ebből fedezhetők a számla nélküli (fekete) kiadások. Külön összesítjük,
+   hogy a legális KP bevételtől elváljon.
+
+    egyenleg = bevétel + fedezet-bevétel + átvezetés - sima kiadás - fekete kiadás
+    (a kiadás-oldali fedezet nincs benne)
 
 Minden összeg BRUTTÓ: egy doboz pénz nem tud nettó lenni.
 
@@ -64,6 +71,7 @@ ATVEZETES = "atvezetes"
 SIMA_KIADAS = "kiadas"
 FEKETE_KIADAS = "fekete_kiadas"
 FEDEZET = "fedezet"
+FEDEZET_BEVETEL = "fedezet_bevetel"
 
 
 def kp_ervenyes_sql():
@@ -85,7 +93,7 @@ class KasszaSor:
     id: int
     #: bevetel (Revenue) | kiadas (Expense) | kp_forgalom (átvezetés)
     forras: str
-    #: bevetel | atvezetes | kiadas | fekete_kiadas | fedezet - lásd fent.
+    #: bevetel | fedezet_bevetel | atvezetes | kiadas | fekete_kiadas | fedezet - lásd fent.
     tipus: str
     datum: date | None
     megnevezes: str
@@ -134,6 +142,10 @@ class Osszesites:
     #: FEDEZET: számlás kiadás, amiért a pénz nem jött ki - az egyenlegben nincs.
     fedezet: float = 0.0
     fedezet_db: int = 0
+    #: FEDEZET-BEVÉTEL: számla nélkül, készpénzben kifizetett projektkód - a
+    #: pénz a dobozban van, az egyenlegben benne van.
+    fedezet_bevetel: float = 0.0
+    fedezet_bevetel_db: int = 0
 
     @property
     def atvezetes(self) -> float:
@@ -142,7 +154,7 @@ class Osszesites:
 
     @property
     def be(self) -> float:
-        return self.bevetel + self.atvezetes_be
+        return self.bevetel + self.fedezet_bevetel + self.atvezetes_be
 
     @property
     def ki(self) -> float:
@@ -160,6 +172,9 @@ class Osszesites:
         elif sor.tipus == BEVETEL:
             self.bevetel += sor.be
             self.bevetel_db += 1
+        elif sor.tipus == FEDEZET_BEVETEL:
+            self.fedezet_bevetel += sor.be
+            self.fedezet_bevetel_db += 1
         elif sor.tipus == FEDEZET:
             self.fedezet += sor.fedezet
             self.fedezet_db += 1
@@ -249,10 +264,22 @@ def _atvezetesek(db: Session) -> list[KasszaSor]:
     return ki
 
 
+def szamla_nelkuli_bevetel(r: Revenue) -> bool:
+    """Számla NÉLKÜL fizetett projektkód bevétele-e ez - készpénznél ettől
+    FEDEZET-BEVÉTEL a sor, nem legális bevétel (lásd a modul leírását).
+
+    Csak a kimondott jelölés dönt (a projektkódon „nincs számla” vagy „papír
+    nélkül”), nem a feltöltött PDF hiánya: sok számlás KP bevételhez egyszerűen
+    nem töltötték fel a számlát, és azok nem fedezetek."""
+    pk = r.project_code
+    return pk is not None and bool(pk.szamla_kihagyva or pk.papir_nelkul)
+
+
 def _bevetelek(db: Session) -> list[KasszaSor]:
     """A készpénzes projektkód-kifizetések. Csak a MEGTÖRTÉNT (fizetési
     dátummal bíró) és az éves bevételbe számító sor - a "nem ezen az úton jött"
-    jelölésű nem pénz, ami a dobozba került (lásd services/elszamolas.py)."""
+    jelölésű nem pénz, ami a dobozba került (lásd services/elszamolas.py).
+    A számla nélkül fizetett projektkód sora FEDEZET-BEVÉTEL."""
     sorok = db.scalars(
         select(Revenue)
         .where(
@@ -268,7 +295,7 @@ def _bevetelek(db: Session) -> list[KasszaSor]:
         KasszaSor(
             id=r.id,
             forras="bevetel",
-            tipus=BEVETEL,
+            tipus=FEDEZET_BEVETEL if szamla_nelkuli_bevetel(r) else BEVETEL,
             datum=r.fizetes_datuma,
             megnevezes=r.nev or (f"{r.project_code.projektkod} kifizetése" if r.project_code else "Készpénzes bevétel"),
             projektkod=r.project_code.projektkod if r.project_code else None,
