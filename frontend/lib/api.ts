@@ -2658,9 +2658,6 @@ export type Kassza = {
    * számlája) kiadás. */
   idei_bevetel: number;
   idei_bevetel_db: number;
-  /** Számla nélkül, készpénzben fizetett projektkódok - FEDEZET-BEVÉTEL. */
-  idei_fedezet_bevetel: number;
-  idei_fedezet_bevetel_db: number;
   idei_atvezetes: number;
   idei_atvezetes_db: number;
   idei_sima_kiadas: number;
@@ -2675,10 +2672,8 @@ export async function getFinanceSummary(): Promise<FinanceSummary | null> {
 }
 
 /** A házipénztár-tétel FAJTÁJA (lásd backend services/kassza.py). */
-/** A `fedezet` látszik, de nem mozgatja az egyenleget; a `fedezet_bevetel`
- * (számla nélkül, készpénzben fizetett projektkód) növeli (lásd backend
- * services/kassza.py). */
-export type HazipenztarTipus = "bevetel" | "fedezet_bevetel" | "atvezetes" | "kiadas" | "fekete_kiadas" | "fedezet";
+/** A `fedezet` látszik, de nem mozgatja az egyenleget (lásd backend services/kassza.py). */
+export type HazipenztarTipus = "bevetel" | "atvezetes" | "kiadas" | "fekete_kiadas" | "fedezet";
 
 /** Egy mozgás a Házipénztár naplójában. */
 export type KpNaploSor = {
@@ -2722,9 +2717,6 @@ export type KpOsszesites = {
   /** Számlás kiadás, amiért a pénz nem jött ki a dobozból - nincs az egyenlegben. */
   fedezet: number;
   fedezet_db: number;
-  /** Számla nélkül, készpénzben fizetett projektkód - az egyenlegben benne van. */
-  fedezet_bevetel: number;
-  fedezet_bevetel_db: number;
   be: number;
   ki: number;
   egyenleg: number;
@@ -4494,9 +4486,6 @@ export type MegrendeloiSzamlaAllas = {
    * nélkül. */
   fizetes_modja: string | null;
   keszpenzes: boolean;
-  /** Készpénzben, számla nélkül fizetve - a Házipénztárban FEDEZETKÉNT áll
-   * (lásd backend services/kassza.py). */
-  kp_szamla_nelkul?: boolean;
   /** Készpénzes bevételnél ettől függ, hogy sima legális bevétel-e, vagy
    * FEDEZET a számla nélküli kiadásokhoz. */
   van_szamla_a_bevetelen: boolean;

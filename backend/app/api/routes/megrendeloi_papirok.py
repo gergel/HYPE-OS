@@ -918,15 +918,6 @@ class SzamlaAllasOut(BaseModel):
     #: Készpénzes bevételnél ettől függ, hogy sima legális bevétel-e, vagy
     #: FEDEZET a számla nélküli kiadásokhoz (lásd services/bizonylat.py).
     van_szamla_a_bevetelen: bool = False
-    #: Készpénzben, számla nélkül fizetve - a házipénztárban fedezetként áll.
-    kp_szamla_nelkul: bool = False
-
-
-class KpSzamlaNelkulIn(BaseModel):
-    #: Mikor adták át a készpénzt - kötelező.
-    kifizetes_datuma: date | None = None
-    #: Opcionális megjegyzés (különben „Készpénzben fizették, számla nélkül.”).
-    megjegyzes: str | None = None
 
 
 class KifizetesIn(BaseModel):
@@ -1009,26 +1000,6 @@ def set_szamla_kifizetve(
             bevetelbe_ne_keruljon=payload.bevetelbe_ne_keruljon,
             kihagyas_oka=payload.kihagyas_oka,
             fizetes_modja=payload.fizetes_modja,
-        )
-    except megrendeloi_szamla.SzamlaHiba as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    db.commit()
-    return allas
-
-
-@router.post("/szamla/{project_code_id}/kp-szamla-nelkul", response_model=SzamlaAllasOut)
-def set_kp_szamla_nelkul(
-    project_code_id: int,
-    payload: KpSzamlaNelkulIn,
-    db: Session = Depends(get_db),
-    _user: Employee = Depends(require_page_action(PAGE, "edit")),
-):
-    """„Készpénzben fizették, számla nélkül” - nincs számla + kifizetve
-    készpénzzel, egy lépésben. A házipénztárba fedezetként kerül."""
-    pk = _projektkod_vagy_404(db, project_code_id)
-    try:
-        allas = megrendeloi_szamla.jelold_kp_szamla_nelkul(
-            db, pk, kifizetes_datuma=payload.kifizetes_datuma, megjegyzes=payload.megjegyzes
         )
     except megrendeloi_szamla.SzamlaHiba as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
