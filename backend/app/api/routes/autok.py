@@ -468,13 +468,14 @@ def create_auto_kiadas(
     if not kifizetve and payload.fizetes_hatarideje is None:
         raise HTTPException(status_code=400, detail="Add meg a fizetési határidőt.")
     datum = (payload.datum or date.today()) if kifizetve else None
-    # A Kiadásokba a RENDSZÁM után a megjegyzés (jellemzően a partner, pl.
-    # "MOL" - az AI-kiolvasás is ide teszi) kerül, a "Mire ment" pedig a
-    # megjegyzésbe (a felhasználó kérése, 2026-10-29): így a Cégnév oszlopban
-    # az látszik, akinek fizettünk. Megjegyzés nélkül csak a rendszám.
-    megjegyzes = (payload.megjegyzes or "").strip()
+    # A Kiadásokban a Cégnév CSAK a cég (a megjegyzés mezőbe írt partner, pl.
+    # "MOL Budaörs" - az AI-kiolvasás is ide teszi), a rendszám és a "Mire
+    # ment" a megjegyzésbe kerül: "RENDSZÁM – Tankolás" (a felhasználó kérése,
+    # 2026-10-29). Partner nélkül a "Mire ment" áll a Cégnév helyén.
+    mire_ment = payload.megnevezes.strip()
+    partner = (payload.megjegyzes or "").strip()
     kiadas = Expense(
-        megnevezes=f"{auto.rendszam} – {megjegyzes}" if megjegyzes else auto.rendszam,
+        megnevezes=(partner or mire_ment)[:255],
         auto_id=auto.id,
         project_code_id=payload.project_code_id,
         tipus="extra",
@@ -493,7 +494,7 @@ def create_auto_kiadas(
         kesz=kifizetve,
         nincs_szamla=payload.nincs_szamla,
         hozzaadas_a_kiadasokhoz=True,
-        megjegyzes=payload.megnevezes.strip(),
+        megjegyzes=f"{auto.rendszam} – {mire_ment}",
     )
     db.add(kiadas)
     db.commit()

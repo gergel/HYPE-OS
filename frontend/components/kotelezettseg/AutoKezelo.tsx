@@ -103,8 +103,8 @@ function KoltsegUrlap({ autoId, onKesz }: { autoId: number; onKesz: () => void }
       const szoveg = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
       let beirt = 0;
       // "Mire ment" = a számla fő tétele; a partner neve a megjegyzésbe kerül -
-      // a Kiadásokban ez áll a rendszám után, a "Mire ment" pedig a
-      // megjegyzésben (lásd backend routes/autok.create_auto_kiadas).
+      // a Kiadásokban ez a Cégnév, a rendszám és a "Mire ment" pedig a
+      // megjegyzésben áll (lásd backend routes/autok.create_auto_kiadas).
       const mire = szoveg(a.kiadas_leiras) ?? szoveg(a.megnevezes);
       if (mire) {
         setMegnevezes(mire);
