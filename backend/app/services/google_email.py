@@ -355,16 +355,25 @@ def search_thread_by_subject(subject: str) -> str | None:
     threads = res.get("threads") or []
     return threads[0].get("id") if threads else None
 
+#: Az aláírásokban szereplő HYPE logó (a felhasználó kérése, 2026-10-30: a
+#: kerek, fekete HYPE PRODUCTIONS logó). A repóban van
+#: (assets/email/hype_email_logo.png), a levelezőprogramok a GitHub nyers
+#: címéről töltik le - a deploy ágról, mert onnan megy élesbe minden.
+EMAIL_LOGO_URL = (
+    "https://raw.githubusercontent.com/gergel/HYPE-OS/"
+    "claude/hype-os-project-scaffold-8nlgej/assets/email/hype_email_logo.png"
+)
+
 #: Az ADMINISZTRÁCIÓS aláírás - a kimenő SZERZŐDÉSEK és TIG-ek levelei ezzel
 #: záródnak (alvállalkozói szerződés és emlékeztetője, külsős és belsős TIG,
 #: keretszerződés). A felhasználó kérése (2026-10): Rahman Martin mellett Berta
 #: Zsóka (back office manager) is szerepeljen. EGY helyen tartjuk, hogy a
 #: levelek ne csússzanak szét.
-ADMIN_ALAIRAS_HTML = """\
+ADMIN_ALAIRAS_HTML = f"""\
 <table cellpadding="0" cellspacing="0" style="font-family: Arial, sans-serif; font-size: 12px; color: #000;">
   <tr>
     <td style="vertical-align: middle; width: 150px;">
-      <img src="https://raw.githubusercontent.com/gergel/ADMIN_projektkod/main/hype_logo_BG_03%20(2).png" alt="Hype logo" width="110">
+      <img src="{EMAIL_LOGO_URL}" alt="Hype logo" width="110" height="110">
     </td>
     <td style="padding-left: 20px; vertical-align: middle;">
       <p style="margin: 0; font-size: 12px; font-weight: bold;">HYPE PRODUCTIONS - ADMINISZTRÁCIÓ</p>
@@ -390,11 +399,11 @@ ADMIN_ALAIRAS_HTML = """\
 #: A rögzített HYPE-aláírás (a felhasználó adta meg a diszpó-kiküldéshez) -
 #: KÖZÖS konstans: a diszpó-levelek ÉS a munkafelajánlás-levelek is ezzel
 #: záródnak (a felhasználó kérése: "ugyanaz az aláírás, mint a diszpóknál").
-HYPE_ALAIRAS_HTML = """\
+HYPE_ALAIRAS_HTML = f"""\
 <table cellpadding="0" cellspacing="0" style="font-family: Arial, sans-serif; font-size: 12px; color: #000;">
   <tr>
     <td style="vertical-align: middle; width: 150px;">
-      <img src="https://raw.githubusercontent.com/gergel/ADMIN_projektkod/main/hype_logo_BG_03%20(2).png" alt="Hype logo" width="110">
+      <img src="{EMAIL_LOGO_URL}" alt="Hype logo" width="110" height="110">
     </td>
     <td style="padding-left: 20px; vertical-align: middle;">
       <p style="margin: 0; font-size: 12px; font-weight: bold;">
