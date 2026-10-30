@@ -99,6 +99,11 @@ function loginraKuld(request: NextRequest, { tokentTorol }: { tokentTorol: boole
  * jelentkeznie. */
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  // A csapatnak e-mailben küldhető, adatot nem tároló aláírássablon.
+  // Csak ez a két pontos útvonal publikus; a többi oldal védelme változatlan.
+  if (pathname === "/emailalairas" || pathname === "/emailalairas/") {
+    return NextResponse.next();
+  }
   // Az oldal ikonjai (app/favicon.ico, app/icon.svg, app/apple-icon.png)
   // bejelentkezés nélkül is kellenek - a böngésző a login oldal fülére is
   // ezeket kéri, és átirányítva sosem jelenne meg az ikon.
